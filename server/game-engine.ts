@@ -179,12 +179,14 @@ export function dealFlop(state: GameState): void {
   state.communityCards.push(state.deck.pop()!, state.deck.pop()!, state.deck.pop()!);
   state.phase = 'flop';
   collectBets(state);
-  state.actingPlayerIndex = state.players.findIndex((p) => p.isDealer);
-  state.actingPlayerIndex = (state.actingPlayerIndex + 1) % state.players.length;
-  while (state.players[state.actingPlayerIndex].folded && state.players.some((p) => !p.folded)) {
-    state.actingPlayerIndex = (state.actingPlayerIndex + 1) % state.players.length;
+  let idx = state.players.findIndex((p) => p.isDealer);
+  idx = (idx + 1) % state.players.length;
+  while (state.players[idx].folded && state.players.some((p) => !p.folded)) {
+    idx = (idx + 1) % state.players.length;
   }
-  state.firstToActThisRound = state.actingPlayerIndex;
+  state.firstToActThisRound = idx;
+  state.actingPlayerIndex = firstPlayerWhoCanAct(state, idx);
+  if (state.actingPlayerIndex < 0) state.actingPlayerIndex = idx;
 }
 
 export function dealTurn(state: GameState): void {
@@ -192,12 +194,14 @@ export function dealTurn(state: GameState): void {
   state.communityCards.push(state.deck.pop()!);
   state.phase = 'turn';
   collectBets(state);
-  state.actingPlayerIndex = state.players.findIndex((p) => p.isDealer);
-  state.actingPlayerIndex = (state.actingPlayerIndex + 1) % state.players.length;
-  while (state.players[state.actingPlayerIndex].folded) {
-    state.actingPlayerIndex = (state.actingPlayerIndex + 1) % state.players.length;
+  let idx = state.players.findIndex((p) => p.isDealer);
+  idx = (idx + 1) % state.players.length;
+  while (state.players[idx].folded) {
+    idx = (idx + 1) % state.players.length;
   }
-  state.firstToActThisRound = state.actingPlayerIndex;
+  state.firstToActThisRound = idx;
+  state.actingPlayerIndex = firstPlayerWhoCanAct(state, idx);
+  if (state.actingPlayerIndex < 0) state.actingPlayerIndex = idx;
 }
 
 export function dealRiver(state: GameState): void {
@@ -205,12 +209,14 @@ export function dealRiver(state: GameState): void {
   state.communityCards.push(state.deck.pop()!);
   state.phase = 'river';
   collectBets(state);
-  state.actingPlayerIndex = state.players.findIndex((p) => p.isDealer);
-  state.actingPlayerIndex = (state.actingPlayerIndex + 1) % state.players.length;
-  while (state.players[state.actingPlayerIndex].folded) {
-    state.actingPlayerIndex = (state.actingPlayerIndex + 1) % state.players.length;
+  let idx = state.players.findIndex((p) => p.isDealer);
+  idx = (idx + 1) % state.players.length;
+  while (state.players[idx].folded) {
+    idx = (idx + 1) % state.players.length;
   }
-  state.firstToActThisRound = state.actingPlayerIndex;
+  state.firstToActThisRound = idx;
+  state.actingPlayerIndex = firstPlayerWhoCanAct(state, idx);
+  if (state.actingPlayerIndex < 0) state.actingPlayerIndex = idx;
 }
 
 function nextActingPlayer(state: GameState): number {
@@ -224,9 +230,24 @@ function nextActingPlayer(state: GameState): number {
   return -1;
 }
 
+function noPlayerCanAct(state: GameState): boolean {
+  return !state.players.some((p) => !p.folded && !p.allIn && p.chips > 0);
+}
+
+function firstPlayerWhoCanAct(state: GameState, fromIndex: number): number {
+  let i = fromIndex;
+  const start = i;
+  do {
+    const p = state.players[i];
+    if (!p.folded && !p.allIn && p.chips > 0) return i;
+    i = (i + 1) % state.players.length;
+  } while (i !== start);
+  return -1;
+}
+
 function bettingRoundComplete(state: GameState): boolean {
   const active = state.players.filter((p) => !p.folded && !p.allIn);
-  if (active.length <= 1) return true;
+  if (active.length === 0) return true;
   const target = Math.max(...state.players.map((p) => p.currentBet));
   const allMatched = state.players
     .filter((p) => !p.folded && !p.allIn)
@@ -319,7 +340,7 @@ export function applyAction(
 }
 
 function advanceStreetsUntilSomeoneCanActOrShowdown(state: GameState, bigBlind: number, smallBlind: number): void {
-  while (state.phase !== 'showdown' && state.phase !== 'finished' && nextActingPlayer(state) === -1) {
+  while (state.phase !== 'showdown' && state.phase !== 'finished' && noPlayerCanAct(state)) {
     if (state.phase === 'preflop') dealFlop(state);
     else if (state.phase === 'flop') dealTurn(state);
     else if (state.phase === 'turn') dealRiver(state);

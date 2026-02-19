@@ -34,10 +34,11 @@ export function Table({ state, playerId, socket }: TableProps) {
     return () => clearInterval(t);
   }, [isMyTurn, game.actingPlayerIndex, game.phase]);
   const toCall = me ? Math.max(0, game.currentBet - me.currentBet) : 0;
+  const facingAllIn = game.players.some((p: Player) => p.id !== playerId && p.allIn);
   const bigBlind = state.config.bigBlind;
   const raiseMin = Math.max(bigBlind, game.currentBet + 1);
   const raiseMax = me ? me.currentBet + me.chips : raiseMin;
-  const canRaise = me && me.chips > 0 && raiseMax > game.currentBet;
+  const canRaise = me && me.chips > 0 && raiseMax > game.currentBet && !facingAllIn;
   const effectiveRaiseMin = Math.min(raiseMin, raiseMax);
   const effectiveRaiseMax = Math.max(raiseMin, raiseMax);
   const showSlider = canRaise && effectiveRaiseMax > effectiveRaiseMin;
