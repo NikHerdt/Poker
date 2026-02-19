@@ -13,8 +13,8 @@ export function FieldGoalMinigame({ onComplete }: FieldGoalMinigameProps) {
   const [direction, setDirection] = useState(0);
   const [powerLocked, setPowerLocked] = useState(false);
   const [directionLocked, setDirectionLocked] = useState(false);
-  const [powerVel, setPowerVel] = useState(2);
-  const [directionVel, setDirectionVel] = useState(3);
+  const [powerVel, setPowerVel] = useState(4);
+  const [directionVel, setDirectionVel] = useState(3.75);
   const [result, setResult] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -32,7 +32,7 @@ export function FieldGoalMinigame({ onComplete }: FieldGoalMinigameProps) {
 
   useEffect(() => {
     if (phase !== 'power') return;
-    setPowerVel((v) => (power >= 100 ? -2 : power <= 0 ? 2 : v));
+    setPowerVel((v) => (power >= 100 ? -4 : power <= 0 ? 4 : v));
   }, [phase, power]);
 
   useEffect(() => {
@@ -50,7 +50,7 @@ export function FieldGoalMinigame({ onComplete }: FieldGoalMinigameProps) {
 
   useEffect(() => {
     if (phase !== 'direction') return;
-    setDirectionVel((v) => (direction >= 50 ? -3 : direction <= -50 ? 3 : v));
+    setDirectionVel((v) => (direction >= 50 ? -3.75 : direction <= -50 ? 3.75 : v));
   }, [phase, direction]);
 
   const handleKey = useCallback(

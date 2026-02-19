@@ -54,7 +54,8 @@ export function Table({ state, playerId, socket }: TableProps) {
     game.phase !== 'showdown' &&
     game.phase !== 'finished' &&
     !(state.fieldGoalUsed ?? {})[playerId] &&
-    game.lastAction?.action === 'raise';
+    game.lastAction?.action === 'raise' &&
+    game.lastAction?.playerId !== playerId;
   const [showFieldGoalMinigame, setShowFieldGoalMinigame] = useState(false);
 
   const handleFieldGoalComplete = (success: boolean) => {
@@ -196,7 +197,9 @@ export function Table({ state, playerId, socket }: TableProps) {
                   ? 'You already used your field goal'
                   : game.lastAction?.action !== 'raise'
                     ? 'Field goal only on a raise'
-                    : 'Kick a field goal to reverse the last raise'
+                    : game.lastAction?.playerId === playerId
+                      ? 'You cannot field goal your own raise'
+                      : 'Kick a field goal to reverse the last raise'
               }
             >
               Field Goal

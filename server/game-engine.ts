@@ -436,6 +436,7 @@ export function canAct(state: GameState, playerId: string): boolean {
 
 export function canFieldGoal(state: GameState, playerId: string, fieldGoalUsed: Record<string, boolean> | undefined): boolean {
   if (!state.lastAction || state.lastAction.action !== 'raise') return false;
+  if (state.lastAction.playerId === playerId) return false;
   if (fieldGoalUsed?.[playerId]) return false;
   const player = state.players.find((p) => p.id === playerId);
   if (!player || player.folded) return false;
