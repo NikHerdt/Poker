@@ -221,6 +221,64 @@
   margin-bottom: 0.35rem;
 }
 
+.result-panel .rebuy-prompt {
+  margin-top: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.result-panel .rebuy-prompt p {
+  margin: 0 0 0.5rem;
+  color: #b8c4b8;
+  font-size: 0.95rem;
+}
+
+.result-panel .rebuy-prompt.spectator p {
+  margin-bottom: 0.5rem;
+}
+
+.result-panel .rebuy-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.result-panel .rebuy-yes-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  background: #1a6b4a;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.result-panel .rebuy-yes-btn:hover {
+  background: #208a5c;
+}
+
+.result-panel .rebuy-no-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  background: #5c3a3a;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.result-panel .rebuy-no-btn:hover {
+  background: #6c4a4a;
+}
+
+.result-panel .rebuy-requested {
+  font-size: 0.85rem;
+  color: #9ab09a;
+  margin: 0.25rem 0 0;
+}
+
+.result-panel .waiting-host {
+  margin-top: 0.75rem;
+  color: #8a9a8a;
+  font-size: 0.9rem;
+}
+
 .result-panel .next-btn {
   margin-top: 0.75rem;
   padding: 0.6rem 1.25rem;
@@ -228,8 +286,19 @@
   background: #1a6b4a;
 }
 
-.result-panel .next-btn:hover {
+.result-panel .next-btn:hover:not(:disabled) {
   background: #208a5c;
+}
+
+.result-panel .next-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.player-seat .buy-in-count {
+  font-size: 0.8rem;
+  color: #8a9a8a;
+  margin-bottom: 0.2rem;
 }
 
 .actions-bar {

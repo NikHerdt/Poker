@@ -19,6 +19,9 @@ export interface UseGameSocketResult {
   leaveRoom: () => void;
   clearError: () => void;
   sendFieldGoalAttempt: (success: boolean) => void;
+  sendRebuyYes: () => void;
+  sendRebuyNo: () => void;
+  sendRequestRebuy: () => void;
 }
 
 export function useGameSocket(): UseGameSocketResult {
@@ -87,6 +90,18 @@ export function useGameSocket(): UseGameSocketResult {
     [send]
   );
 
+  const sendRebuyYes = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'rebuy_yes' });
+  }, [send]);
+
+  const sendRebuyNo = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'rebuy_no' });
+  }, [send]);
+
+  const sendRequestRebuy = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'request_rebuy' });
+  }, [send]);
+
   const clearError = useCallback(() => setError(null), []);
 
   useEffect(() => {
@@ -147,5 +162,8 @@ export function useGameSocket(): UseGameSocketResult {
     leaveRoom,
     clearError,
     sendFieldGoalAttempt,
+    sendRebuyYes,
+    sendRebuyNo,
+    sendRequestRebuy,
   };
 }

@@ -50,6 +50,8 @@ export interface Player {
   lastAction?: PlayerActionType;
   allIn: boolean;
   hasActedThisRound?: boolean;
+  /** Number of buy-ins this player has taken (1 = initial buy-in). */
+  buyInCount?: number;
 }
 
 export interface Pot {
@@ -94,6 +96,12 @@ export interface RoomState {
   hostId: string;
   playerIdToName: Record<string, string>;
   fieldGoalUsed?: Record<string, boolean>;
+  /** For players with 0 chips at end of hand: pending until they send rebuy_yes/rebuy_no. */
+  rebuyDecisions?: Record<string, 'pending' | 'yes' | 'no'>;
+  /** Spectators who requested to rebuy and will join at start of next hand. */
+  rebuyRequested?: Record<string, boolean>;
+  /** Persisted buy-in count when player is not in current hand (e.g. spectator). */
+  playerIdToBuyInCount?: Record<string, number>;
 }
 
 export type ClientMessageType =
@@ -102,7 +110,10 @@ export type ClientMessageType =
   | 'start_game'
   | 'action'
   | 'leave_room'
-  | 'field_goal_attempt';
+  | 'field_goal_attempt'
+  | 'rebuy_yes'
+  | 'rebuy_no'
+  | 'request_rebuy';
 
 export type ServerMessageType =
   | 'room_created'

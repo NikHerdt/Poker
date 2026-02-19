@@ -34,7 +34,8 @@ function createPlayer(
   chips: number,
   isDealer: boolean,
   isSB: boolean,
-  isBB: boolean
+  isBB: boolean,
+  buyInCount: number = 1
 ): Player {
   return {
     id,
@@ -50,6 +51,7 @@ function createPlayer(
     connected: true,
     allIn: false,
     hasActedThisRound: false,
+    buyInCount,
   };
 }
 
@@ -57,7 +59,9 @@ export function startHand(
   playerIds: string[],
   playerNames: Record<string, string>,
   config: Partial<RoomConfig>,
-  handNumber: number
+  handNumber: number,
+  previousChips?: Record<string, number>,
+  previousBuyInCounts?: Record<string, number>
 ): GameState {
   const smallBlind = config.smallBlind ?? DEFAULT_SMALL_BLIND;
   const bigBlind = config.bigBlind ?? DEFAULT_BIG_BLIND;
@@ -72,16 +76,19 @@ export function startHand(
   const sbIndex = (dealerIndex + 1) % playerIds.length;
   const bbIndex = (dealerIndex + 2) % playerIds.length;
 
-  const players: Player[] = playerIds.map((id, i) =>
-    createPlayer(
+  const players: Player[] = playerIds.map((id, i) => {
+    const chips = previousChips != null ? (previousChips[id] ?? buyIn) : buyIn;
+    const buyInCount = previousBuyInCounts != null ? (previousBuyInCounts[id] ?? 1) : 1;
+    return createPlayer(
       id,
       playerNames[id] ?? 'Player',
-      buyIn,
+      chips,
       i === dealerIndex,
       i === sbIndex,
-      i === bbIndex
-    )
-  );
+      i === bbIndex,
+      buyInCount
+    );
+  });
 
   for (let i = 0; i < 2; i++) {
     for (let p = 0; p < players.length; p++) {

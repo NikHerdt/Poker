@@ -119,3 +119,20 @@ export function canStartGame(roomCode: string): boolean {
   if (!room) return false;
   return room.playerIds.size >= MIN_PLAYERS && room.state.game === null;
 }
+
+/** When game just finished, set rebuyDecisions for 0-chip players and persist buy-in counts. */
+export function ensureRebuyStateWhenFinished(roomCode: string): void {
+  const room = rooms.get(roomCode.toUpperCase());
+  if (!room?.state.game || room.state.game.phase !== 'finished') return;
+  const game = room.state.game;
+  if (room.state.rebuyDecisions && Object.keys(room.state.rebuyDecisions).length > 0) return;
+
+  if (!room.state.playerIdToBuyInCount) room.state.playerIdToBuyInCount = {};
+  for (const p of game.players) {
+    room.state.playerIdToBuyInCount[p.id] = p.buyInCount ?? 1;
+  }
+  room.state.rebuyDecisions = {};
+  for (const p of game.players) {
+    if (p.chips <= 0) room.state.rebuyDecisions![p.id] = 'pending';
+  }
+}

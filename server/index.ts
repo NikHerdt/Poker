@@ -4,13 +4,14 @@ import {
   getRoom,
   createRoom,
   joinRoom,
-  setRoomState,
   addSocket,
   removeSocket,
   getSockets,
   leaveRoom,
   canStartGame,
+  ensureRebuyStateWhenFinished,
 } from './room-manager';
+import { MIN_PLAYERS } from '../shared/constants';
 import {
   startHand,
   applyAction,
@@ -100,15 +101,74 @@ wss.on('connection', (ws) => {
           ws.send(JSON.stringify({ type: 'error', error: 'Game already in progress' }));
           return;
         }
-        const playerIds = [...room.playerIds];
+
+        let activePlayerIds: string[];
+        let previousChips: Record<string, number> | undefined;
+        let previousBuyInCounts: Record<string, number> | undefined;
+        const buyIn = room.state.config.buyIn ?? 200;
+
+        if (isNewGame) {
+          activePlayerIds = [...room.playerIds];
+        } else {
+          ensureRebuyStateWhenFinished(currentRoomCode);
+          const prevGame = room.state.game!;
+          const rebuy = room.state.rebuyDecisions ?? {};
+          const requested = room.state.rebuyRequested ?? {};
+          const buyInCounts = room.state.playerIdToBuyInCount ?? {};
+
+          const withChips = prevGame.players.filter((p) => p.chips > 0).map((p) => p.id);
+          const zeroRebuyYes = prevGame.players.filter((p) => p.chips <= 0 && rebuy[p.id] === 'yes').map((p) => p.id);
+          const spectatorRebuy = [...room.playerIds].filter(
+            (id) => !prevGame.players.some((p) => p.id === id) && requested[id]
+          );
+
+          activePlayerIds = [...withChips, ...zeroRebuyYes, ...spectatorRebuy];
+
+          if (activePlayerIds.length < MIN_PLAYERS) {
+            ws.send(JSON.stringify({ type: 'error', error: 'Not enough players to start next hand (need at least 2 with chips or rebuying)' }));
+            return;
+          }
+
+          previousChips = {};
+          previousBuyInCounts = {};
+          for (const id of withChips) {
+            const p = prevGame.players.find((x) => x.id === id)!;
+            previousChips[id] = p.chips;
+            previousBuyInCounts[id] = p.buyInCount ?? 1;
+          }
+          for (const id of zeroRebuyYes) {
+            previousChips[id] = buyIn;
+            const p = prevGame.players.find((x) => x.id === id)!;
+            previousBuyInCounts[id] = (p.buyInCount ?? 1) + 1;
+          }
+          for (const id of spectatorRebuy) {
+            previousChips[id] = buyIn;
+            previousBuyInCounts[id] = (buyInCounts[id] ?? 1) + 1;
+          }
+
+          room.state.rebuyDecisions = undefined;
+          room.state.rebuyRequested = undefined;
+        }
+
+        if (isFinished && room.state.hostId !== currentPlayerId) {
+          ws.send(JSON.stringify({ type: 'error', error: 'Only host can start next hand' }));
+          return;
+        }
+
         const handNumber = isFinished && room.state.game ? room.state.game.handNumber + 1 : 1;
         const game = startHand(
-          playerIds,
+          activePlayerIds,
           room.state.playerIdToName,
           room.state.config,
-          handNumber
+          handNumber,
+          previousChips,
+          previousBuyInCounts
         );
         room.state.game = game;
+        if (!room.state.playerIdToBuyInCount) room.state.playerIdToBuyInCount = {};
+        for (const p of game.players) {
+          room.state.playerIdToBuyInCount[p.id] = p.buyInCount ?? 1;
+        }
         broadcast(currentRoomCode, { type: 'game_started', state: room.state });
         return;
       }
@@ -136,6 +196,7 @@ wss.on('connection', (ws) => {
           ws.send(JSON.stringify({ type: 'error', error: (err as Error).message }));
           return;
         }
+        ensureRebuyStateWhenFinished(currentRoomCode);
         broadcast(currentRoomCode, { type: 'room_state', state: room.state });
         return;
       }
@@ -164,7 +225,43 @@ wss.on('connection', (ws) => {
           if (!room.state.fieldGoalUsed) room.state.fieldGoalUsed = {};
           room.state.fieldGoalUsed[currentPlayerId] = true;
         }
+        ensureRebuyStateWhenFinished(currentRoomCode);
         broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+        return;
+      }
+
+      if (msg.type === 'rebuy_yes') {
+        if (!currentRoomCode || !currentPlayerId) return;
+        const room = getRoom(currentRoomCode);
+        if (!room?.state.game || room.state.game.phase !== 'finished') return;
+        if (room.state.rebuyDecisions?.[currentPlayerId] === 'pending') {
+          room.state.rebuyDecisions[currentPlayerId] = 'yes';
+          broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+        }
+        return;
+      }
+
+      if (msg.type === 'rebuy_no') {
+        if (!currentRoomCode || !currentPlayerId) return;
+        const room = getRoom(currentRoomCode);
+        if (!room?.state.game || room.state.game.phase !== 'finished') return;
+        if (room.state.rebuyDecisions?.[currentPlayerId] === 'pending') {
+          room.state.rebuyDecisions[currentPlayerId] = 'no';
+          broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+        }
+        return;
+      }
+
+      if (msg.type === 'request_rebuy') {
+        if (!currentRoomCode || !currentPlayerId) return;
+        const room = getRoom(currentRoomCode);
+        if (!room?.state.game) return;
+        const inGame = room.state.game.players.some((p) => p.id === currentPlayerId);
+        if (!inGame) {
+          if (!room.state.rebuyRequested) room.state.rebuyRequested = {};
+          room.state.rebuyRequested[currentPlayerId] = true;
+          broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+        }
         return;
       }
 

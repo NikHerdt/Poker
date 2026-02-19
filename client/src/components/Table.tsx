@@ -112,9 +112,67 @@ export function Table({ state, playerId, socket }: TableProps) {
               House rule: {b.type === '72' ? '7-2' : '6-9'} bonus – +{b.amount} to {state.playerIdToName[b.playerId]}
             </div>
           ))}
-          <button type="button" className="next-btn" onClick={socket.startGame}>
-            Next hand
-          </button>
+          {me && me.chips <= 0 && state.rebuyDecisions?.[playerId] === 'pending' && (
+            <div className="rebuy-prompt">
+              <p>You are out of chips. Buy back in for the next hand?</p>
+              <div className="rebuy-buttons">
+                <button type="button" className="rebuy-yes-btn" onClick={socket.sendRebuyYes}>
+                  Yes, buy in
+                </button>
+                <button type="button" className="rebuy-no-btn" onClick={socket.sendRebuyNo}>
+                  No, sit out
+                </button>
+              </div>
+            </div>
+          )}
+          {!me && game.phase === 'finished' && (
+            <div className="rebuy-prompt spectator">
+              <p>You are watching. You can buy back in to join at the start of the next hand.</p>
+              {state.rebuyRequested?.[playerId] ? (
+                <p className="rebuy-requested">Rebuy requested. You will be in when the host starts the next hand.</p>
+              ) : (
+                <button type="button" className="rebuy-yes-btn" onClick={socket.sendRequestRebuy}>
+                  Buy back in
+                </button>
+              )}
+            </div>
+          )}
+          {state.hostId === playerId && (() => {
+            const zeroChipIds = game.players.filter((p: Player) => p.chips <= 0).map((p: Player) => p.id);
+            const allDecided = zeroChipIds.every((id: string) => {
+              const d = state.rebuyDecisions?.[id];
+              return d === 'yes' || d === 'no';
+            });
+            const activeCount =
+              game.players.filter((p: Player) => p.chips > 0).length +
+              (zeroChipIds.filter((id: string) => state.rebuyDecisions?.[id] === 'yes').length) +
+              (Object.keys(state.rebuyRequested ?? {}).filter((id: string) => !game.players.some((p: Player) => p.id === id)).length);
+            const canStartNext = allDecided && activeCount >= 2;
+            return (
+              <button
+                type="button"
+                className="next-btn"
+                onClick={socket.startGame}
+                disabled={!canStartNext}
+                title={!allDecided ? 'Waiting for rebuy decisions' : activeCount < 2 ? 'Need at least 2 players to start' : undefined}
+              >
+                Next hand
+              </button>
+            );
+          })()}
+          {state.hostId !== playerId && (() => {
+            const zeroChipIds = game.players.filter((p: Player) => p.chips <= 0).map((p: Player) => p.id);
+            const allDecided = zeroChipIds.every((id: string) => {
+              const d = state.rebuyDecisions?.[id];
+              return d === 'yes' || d === 'no';
+            });
+            if (allDecided) {
+              return (
+                <p className="waiting-host">Waiting for host to start next hand.</p>
+              );
+            }
+            return null;
+          })()}
         </div>
       )}
 
@@ -229,6 +287,7 @@ function PlayerSeat({
         )}
       </div>
       <div className="chips">{player.chips} chips</div>
+      <div className="buy-in-count">Buy-ins: {player.buyInCount ?? 1}</div>
       {player.currentBet > 0 && phase !== 'finished' && (
         <div className="bet">Bet: {player.currentBet}</div>
       )}
