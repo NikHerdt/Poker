@@ -18,6 +18,7 @@ export interface UseGameSocketResult {
   sendAction: (action: { type: 'fold' | 'check' | 'call' | 'raise' | 'all_in'; amount?: number }) => void;
   leaveRoom: () => void;
   clearError: () => void;
+  sendFieldGoalAttempt: (success: boolean) => void;
 }
 
 export function useGameSocket(): UseGameSocketResult {
@@ -76,6 +77,15 @@ export function useGameSocket(): UseGameSocketResult {
     setRoomCode(null);
     setError(null);
   }, [send]);
+
+  const sendFieldGoalAttempt = useCallback(
+    (success: boolean) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        send({ type: 'field_goal_attempt', fieldGoalSuccess: success });
+      }
+    },
+    [send]
+  );
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -136,5 +146,6 @@ export function useGameSocket(): UseGameSocketResult {
     sendAction,
     leaveRoom,
     clearError,
+    sendFieldGoalAttempt,
   };
 }

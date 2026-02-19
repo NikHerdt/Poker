@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import type { RoomState, Card, Player, GameState } from 'shared/types';
 import type { UseGameSocketResult } from '../hooks/useGameSocket';
 import { CardImage } from './CardImage';
+import { FieldGoalMinigame } from './FieldGoalMinigame';
 import './Table.css';
+import './FieldGoalMinigame.css';
 
 const TURN_TIMER_SECONDS = 60;
 
@@ -44,6 +46,20 @@ export function Table({ state, playerId, socket }: TableProps) {
     setRaiseAmount((prev) => Math.max(effectiveRaiseMin, Math.min(effectiveRaiseMax, prev)));
   }, [effectiveRaiseMin, effectiveRaiseMax]);
   const isAllIn = canRaise && (raiseAmount >= raiseMax || !showSlider);
+
+  const canFieldGoal =
+    me &&
+    !me.folded &&
+    game.phase !== 'showdown' &&
+    game.phase !== 'finished' &&
+    !(state.fieldGoalUsed ?? {})[playerId] &&
+    game.lastAction?.action === 'raise';
+  const [showFieldGoalMinigame, setShowFieldGoalMinigame] = useState(false);
+
+  const handleFieldGoalComplete = (success: boolean) => {
+    socket.sendFieldGoalAttempt(success);
+    setShowFieldGoalMinigame(false);
+  };
 
   return (
     <div className="table-page">
@@ -101,12 +117,33 @@ export function Table({ state, playerId, socket }: TableProps) {
         </div>
       )}
 
-      {canAct && me && (
+      {showFieldGoalMinigame && (
+        <FieldGoalMinigame onComplete={handleFieldGoalComplete} />
+      )}
+
+      {me && !me.folded && game.phase !== 'showdown' && game.phase !== 'finished' && (
         <div className="actions-bar">
-          {turnSecondsLeft != null && (
+          {canAct && turnSecondsLeft != null && (
             <div className="timer">Your turn – {turnSecondsLeft}s</div>
           )}
           <div className="buttons">
+            <button
+              type="button"
+              className={`fieldgoal-btn ${!canFieldGoal ? 'fieldgoal-btn-disabled' : ''}`}
+              onClick={() => canFieldGoal && setShowFieldGoalMinigame(true)}
+              disabled={!canFieldGoal}
+              title={
+                (state.fieldGoalUsed ?? {})[playerId]
+                  ? 'You already used your field goal'
+                  : game.lastAction?.action !== 'raise'
+                    ? 'Field goal only on a raise'
+                    : 'Kick a field goal to reverse the last raise'
+              }
+            >
+              Field Goal
+            </button>
+            {canAct && (
+              <>
             <button type="button" className="fold-btn" onClick={() => socket.sendAction({ type: 'fold' })}>
               Fold
             </button>
@@ -145,6 +182,8 @@ export function Table({ state, playerId, socket }: TableProps) {
                   {isAllIn ? 'All-in' : `Raise to ${showSlider ? raiseAmount : raiseMax}`}
                 </button>
               </>
+            )}
+            </>
             )}
           </div>
         </div>

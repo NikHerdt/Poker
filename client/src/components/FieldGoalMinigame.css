@@ -1,0 +1,168 @@
+.fieldgoal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.fieldgoal-modal {
+  background: linear-gradient(180deg, #1a3d30 0%, #0d2a20 100%);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 2rem;
+  min-width: 320px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.fieldgoal-title {
+  margin: 0 0 1.5rem;
+  font-size: 1.5rem;
+  color: #e8e8d8;
+  text-align: center;
+}
+
+.fieldgoal-instruction {
+  margin: 0 0 1rem;
+  color: #b8c4b8;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.fieldgoal-power-bar {
+  position: relative;
+  width: 48px;
+  height: 200px;
+  margin: 0 auto;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.fieldgoal-power-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 40%;
+  top: 40%;
+  background: rgba(40, 180, 100, 0.25);
+  border-radius: 4px;
+}
+
+.fieldgoal-power-needle {
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  height: 12px;
+  background: #e8e0d5;
+  border-radius: 2px;
+  transform: translateY(50%);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.3);
+}
+
+.fieldgoal-direction-wrap {
+  position: relative;
+  height: 48px;
+  width: 280px;
+  margin: 0 auto;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.fieldgoal-direction-zone {
+  position: absolute;
+  left: 42.5%;
+  right: 42.5%;
+  top: 0;
+  bottom: 0;
+  background: rgba(40, 180, 100, 0.25);
+  border-radius: 4px;
+}
+
+.fieldgoal-direction-needle {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 12px;
+  background: #e8e0d5;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.3);
+}
+
+.fieldgoal-result {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.fieldgoal-uprights {
+  position: relative;
+  width: 200px;
+  height: 80px;
+  margin: 0 auto 1rem;
+}
+
+.fieldgoal-crossbar {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 6px;
+  background: #c0b8a8;
+  border-radius: 2px;
+}
+
+.fieldgoal-post {
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 80px;
+  background: #c0b8a8;
+  border-radius: 2px;
+}
+
+.fieldgoal-post-left {
+  left: 50%;
+  transform: translateX(-60px);
+}
+
+.fieldgoal-post-right {
+  left: 50%;
+  transform: translateX(54px);
+}
+
+.fieldgoal-success {
+  color: #60c080;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.fieldgoal-miss {
+  color: #c07060;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.fieldgoal-btn {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background: #2d5c4a;
+  color: #e8e0d5;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.fieldgoal-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fieldgoal-btn-used {
+  opacity: 0.5;
+  filter: grayscale(0.5);
+}

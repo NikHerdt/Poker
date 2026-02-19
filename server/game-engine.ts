@@ -1,4 +1,4 @@
-import type { Card, GameState, Player, Pot, RoomConfig } from '../shared/types';
+import type { Card, GameState, Player, Pot, RoomConfig, LastActionInfo } from '../shared/types';
 import {
   RANKS,
   SUITS,
@@ -254,6 +254,7 @@ export function applyAction(
   if (action.type === 'fold') {
     player.folded = true;
     player.lastAction = 'fold';
+    state.lastAction = { playerId: player.id, action: 'fold' };
     const remaining = state.players.filter((p) => !p.folded);
     if (remaining.length === 1) {
       const totalPot = state.players.reduce((s, p) => s + p.totalBetThisHand, 0);
@@ -265,6 +266,7 @@ export function applyAction(
   } else if (action.type === 'check') {
     if (player.currentBet < state.currentBet) throw new Error('Cannot check');
     player.lastAction = 'check';
+    state.lastAction = { playerId: player.id, action: 'check' };
   } else if (action.type === 'call') {
     const toCall = state.currentBet - player.currentBet;
     const pay = Math.min(toCall, player.chips);
@@ -273,6 +275,7 @@ export function applyAction(
     player.totalBetThisHand += pay;
     if (player.chips <= 0) player.allIn = true;
     player.lastAction = 'call';
+    state.lastAction = { playerId: player.id, action: 'call' };
   } else if (action.type === 'raise' || action.type === 'all_in') {
     const oldCurrentBet = state.currentBet;
     const minRaiseTo = state.currentBet + state.minRaise;
@@ -287,6 +290,7 @@ export function applyAction(
     const raiseSize = state.currentBet - oldCurrentBet;
     state.minRaise = Math.max(state.minRaise, raiseSize);
     player.lastAction = 'raise';
+    state.lastAction = { playerId: player.id, action: 'raise', amount: state.currentBet, previousBet: oldCurrentBet };
   }
 
   const next = nextActingPlayer(state);
@@ -400,4 +404,78 @@ export function canAct(state: GameState, playerId: string): boolean {
   if (idx < 0 || idx !== state.actingPlayerIndex) return false;
   const p = state.players[idx];
   return !p.folded && !p.allIn;
+}
+
+export function canFieldGoal(state: GameState, playerId: string, fieldGoalUsed: Record<string, boolean> | undefined): boolean {
+  if (!state.lastAction || state.lastAction.action !== 'raise') return false;
+  if (fieldGoalUsed?.[playerId]) return false;
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player || player.folded) return false;
+  return true;
+}
+
+export function reverseLastRaise(state: GameState): void {
+  const last = state.lastAction;
+  if (!last || last.action !== 'raise' || last.previousBet === undefined) return;
+  const player = state.players.find((p) => p.id === last.playerId);
+  if (!player) return;
+  const amountToReverse = player.currentBet - last.previousBet;
+  player.currentBet = last.previousBet;
+  player.totalBetThisHand -= amountToReverse;
+  player.chips += amountToReverse;
+  if (player.chips > 0) player.allIn = false;
+  if (state.pots.length > 0 && state.pots[0].amount >= amountToReverse) {
+    state.pots[0].amount -= amountToReverse;
+  }
+  state.currentBet = Math.max(0, ...state.players.map((p) => p.currentBet));
+
+  const raiserIdx = state.players.findIndex((p) => p.id === last.playerId);
+  if (player.currentBet >= state.currentBet) {
+    player.lastAction = 'check';
+    state.lastAction = { playerId: last.playerId, action: 'check' };
+  } else {
+    const toCall = state.currentBet - player.currentBet;
+    const pay = Math.min(toCall, player.chips);
+    player.chips -= pay;
+    player.currentBet += pay;
+    player.totalBetThisHand += pay;
+    if (player.chips <= 0) player.allIn = true;
+    player.lastAction = 'call';
+    state.lastAction = { playerId: last.playerId, action: 'call' };
+  }
+  player.hasActedThisRound = true;
+
+  const next = nextActingPlayerFrom(state, raiserIdx);
+  state.actingPlayerIndex = next >= 0 ? next : raiserIdx;
+}
+
+export function advanceIfBettingRoundComplete(state: GameState, bigBlind: number, smallBlind: number): void {
+  if (!bettingRoundComplete(state)) return;
+  state.pots = buildSidePots(state);
+  const activeCount = state.players.filter((p) => !p.folded).length;
+  if (activeCount <= 1) {
+    state.phase = 'showdown';
+    runShowdown(state, bigBlind, smallBlind);
+    return;
+  }
+  if (state.phase === 'preflop') dealFlop(state);
+  else if (state.phase === 'flop') dealTurn(state);
+  else if (state.phase === 'turn') dealRiver(state);
+  else if (state.phase === 'river') {
+    state.phase = 'showdown';
+    runShowdown(state, bigBlind, smallBlind);
+    return;
+  }
+  advanceStreetsUntilSomeoneCanActOrShowdown(state, bigBlind, smallBlind);
+}
+
+function nextActingPlayerFrom(state: GameState, fromIndex: number): number {
+  const start = fromIndex;
+  let i = (start + 1) % state.players.length;
+  while (i !== start) {
+    const p = state.players[i];
+    if (!p.folded && !p.allIn && p.chips > 0) return i;
+    i = (i + 1) % state.players.length;
+  }
+  return -1;
 }

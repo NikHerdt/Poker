@@ -40,6 +40,7 @@ export function createRoom(hostId: string, hostName: string, config?: Partial<Ro
     game: null,
     hostId,
     playerIdToName: { [hostId]: hostName },
+    fieldGoalUsed: { [hostId]: false },
   };
 
   const room: Room = {
@@ -59,6 +60,8 @@ export function joinRoom(roomCode: string, playerId: string, playerName: string)
 
   room.playerIds.add(playerId);
   room.state.playerIdToName[playerId] = playerName;
+  if (!room.state.fieldGoalUsed) room.state.fieldGoalUsed = {};
+  room.state.fieldGoalUsed[playerId] = false;
   return room.state;
 }
 

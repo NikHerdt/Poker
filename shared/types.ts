@@ -63,6 +63,13 @@ export interface RoomConfig {
   buyIn: number;
 }
 
+export interface LastActionInfo {
+  playerId: string;
+  action: 'check' | 'call' | 'raise' | 'fold';
+  amount?: number;
+  previousBet?: number;
+}
+
 export interface GameState {
   phase: GamePhase;
   communityCards: Card[];
@@ -77,6 +84,7 @@ export interface GameState {
   winnerIds?: string[];
   lastWinningHand?: HandResult;
   houseRuleBonuses?: { playerId: string; type: '72' | '69'; amount: number }[];
+  lastAction?: LastActionInfo;
 }
 
 export interface RoomState {
@@ -85,6 +93,7 @@ export interface RoomState {
   game: GameState | null;
   hostId: string;
   playerIdToName: Record<string, string>;
+  fieldGoalUsed?: Record<string, boolean>;
 }
 
 export type ClientMessageType =
@@ -92,7 +101,8 @@ export type ClientMessageType =
   | 'join_room'
   | 'start_game'
   | 'action'
-  | 'leave_room';
+  | 'leave_room'
+  | 'field_goal_attempt';
 
 export type ServerMessageType =
   | 'room_created'
@@ -107,6 +117,7 @@ export interface ClientMessage {
   playerName?: string;
   config?: Partial<RoomConfig>;
   action?: PlayerAction;
+  fieldGoalSuccess?: boolean;
 }
 
 export interface ServerMessage {

@@ -15,6 +15,9 @@ import {
   startHand,
   applyAction,
   canAct,
+  canFieldGoal,
+  reverseLastRaise,
+  advanceIfBettingRoundComplete,
 } from './game-engine';
 
 const PORT = Number(process.env.PORT) || 3001;
@@ -132,6 +135,34 @@ wss.on('connection', (ws) => {
         } catch (err) {
           ws.send(JSON.stringify({ type: 'error', error: (err as Error).message }));
           return;
+        }
+        broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+        return;
+      }
+
+      if (msg.type === 'field_goal_attempt') {
+        if (!currentRoomCode || !currentPlayerId) {
+          ws.send(JSON.stringify({ type: 'error', error: 'Not in a room' }));
+          return;
+        }
+        const room = getRoom(currentRoomCode);
+        if (!room?.state.game) {
+          ws.send(JSON.stringify({ type: 'error', error: 'No game in progress' }));
+          return;
+        }
+        const game = room.state.game;
+        const used = room.state.fieldGoalUsed ?? {};
+        if (!canFieldGoal(game, currentPlayerId, used)) {
+          ws.send(JSON.stringify({ type: 'error', error: 'Cannot use field goal now' }));
+          return;
+        }
+        const success = msg.fieldGoalSuccess === true;
+        if (success) {
+          reverseLastRaise(game);
+          const { bigBlind, smallBlind } = room.state.config;
+          advanceIfBettingRoundComplete(game, bigBlind, smallBlind);
+          if (!room.state.fieldGoalUsed) room.state.fieldGoalUsed = {};
+          room.state.fieldGoalUsed[currentPlayerId] = true;
         }
         broadcast(currentRoomCode, { type: 'room_state', state: room.state });
         return;

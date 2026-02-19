@@ -336,6 +336,20 @@
   background: #5a4a7a;
 }
 
+.actions-bar button.fieldgoal-btn {
+  background: #3d4a6a;
+}
+
+.actions-bar button.fieldgoal-btn:hover:not(:disabled) {
+  background: #4d5a7a;
+}
+
+.actions-bar button.fieldgoal-btn-disabled,
+.actions-bar button.fieldgoal-btn:disabled {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+
 .card-image {
   display: inline-block;
 }
