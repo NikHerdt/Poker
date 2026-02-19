@@ -1,0 +1,341 @@
+.table-page {
+  min-height: 100vh;
+  padding: 1rem;
+  background: linear-gradient(160deg, #0a2f23 0%, #0d3b2c 40%, #0a3528 100%);
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0;
+}
+
+.table-header .phase {
+  color: #b8c4b8;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.table-header .leave-btn {
+  background: rgba(180, 80, 70, 0.9);
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+}
+
+.table-header .leave-btn:hover {
+  background: rgba(200, 90, 80, 1);
+}
+
+.table-felt {
+  max-width: 920px;
+  margin: 0 auto 1.5rem;
+  background: linear-gradient(145deg, #0e5c3e 0%, #0a4a30 50%, #083d26 100%);
+  border-radius: 24px;
+  padding: 2rem;
+  box-shadow:
+    inset 0 2px 4px rgba(255,255,255,0.06),
+    0 8px 32px rgba(0,0,0,0.4),
+    0 0 0 3px rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.04);
+}
+
+.pot-area {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.pot-label {
+  font-size: 0.85rem;
+  color: #9ab09a;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.25rem;
+}
+
+.pot-amount {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.community-cards {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  flex-wrap: wrap;
+  min-height: 100px;
+  margin-top: 0.75rem;
+}
+
+.community-cards .card-image {
+  margin-right: -24px;
+}
+
+.community-cards .card-image:last-child {
+  margin-right: 0;
+}
+
+.player-seat .cards-wrap .card-image {
+  margin-right: -28px;
+}
+
+.player-seat .cards-wrap .card-image:last-child {
+  margin-right: 0;
+}
+
+.players-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.player-seat {
+  padding: 1rem 1.25rem;
+  background: rgba(0,0,0,0.25);
+  border-radius: 12px;
+  min-width: 200px;
+  border: 2px solid transparent;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.player-seat.is-you {
+  border-color: rgba(255,220,140,0.7);
+  background: rgba(0,0,0,0.35);
+  box-shadow: 0 0 0 1px rgba(255,220,140,0.2);
+}
+
+.player-seat.is-acting {
+  border-color: rgba(120,220,160,0.8);
+  background: rgba(0,40,30,0.5);
+  box-shadow: 0 0 12px rgba(120,220,160,0.15);
+}
+
+.player-seat.folded {
+  opacity: 0.65;
+}
+
+.player-seat .name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.player-seat .name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.player-seat .name .you-badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #c4b88c;
+  margin-left: 0.35rem;
+}
+
+.player-seat .blind-markers {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.player-seat .blind-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 2px solid rgba(0,0,0,0.35);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.player-seat .blind-chip.sb {
+  background: linear-gradient(145deg, #3d6b8a 0%, #2a4d66 100%);
+  color: #e0e8ee;
+}
+
+.player-seat .blind-chip.bb {
+  background: linear-gradient(145deg, #8a5a3d 0%, #664428 100%);
+  color: #f0e6dc;
+}
+
+.player-seat .chips {
+  font-size: 1.05rem;
+  color: #e8e8d8;
+  margin-bottom: 0.25rem;
+}
+
+.player-seat .bet {
+  font-size: 0.85rem;
+  color: #9ab09a;
+  margin-bottom: 0.5rem;
+}
+
+.player-seat .status {
+  font-size: 0.8rem;
+  color: #8a9a8a;
+  margin-bottom: 0.5rem;
+}
+
+.player-seat .cards-wrap {
+  display: flex;
+  margin-top: 0.5rem;
+}
+
+.player-seat .cards-wrap .card-image {
+  margin-right: -28px;
+}
+
+.result-panel {
+  margin-bottom: 1rem;
+  padding: 1.25rem;
+  background: rgba(0,0,0,0.3);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.result-panel .winners {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.result-panel .hand-type {
+  color: #b8c4b8;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.result-panel .bonus {
+  font-size: 0.85rem;
+  color: #9ab09a;
+  margin-bottom: 0.35rem;
+}
+
+.result-panel .next-btn {
+  margin-top: 0.75rem;
+  padding: 0.6rem 1.25rem;
+  font-size: 1rem;
+  background: #1a6b4a;
+}
+
+.result-panel .next-btn:hover {
+  background: #208a5c;
+}
+
+.actions-bar {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: rgba(0,0,0,0.2);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.actions-bar .timer {
+  margin-bottom: 0.5rem;
+  color: #b8c4b8;
+  font-size: 0.9rem;
+}
+
+.actions-bar .buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+
+.raise-slider-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 140px;
+}
+
+.raise-slider-label {
+  font-size: 0.9rem;
+  color: #b8c4b8;
+}
+
+.raise-slider {
+  width: 100%;
+  max-width: 200px;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.3);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.raise-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #1a6b4a;
+  cursor: pointer;
+  border: 2px solid rgba(255,255,255,0.3);
+}
+
+.raise-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #1a6b4a;
+  cursor: pointer;
+  border: 2px solid rgba(255,255,255,0.3);
+}
+
+.actions-bar button {
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.actions-bar button.fold-btn {
+  background: #5c3a3a;
+}
+
+.actions-bar button.fold-btn:hover {
+  background: #6c4a4a;
+}
+
+.actions-bar button.check-call-btn {
+  background: #2d5c4a;
+}
+
+.actions-bar button.check-call-btn:hover {
+  background: #3d7a5e;
+}
+
+.actions-bar button.raise-btn {
+  background: #1a5c44;
+}
+
+.actions-bar button.raise-btn:hover {
+  background: #227a5a;
+}
+
+.actions-bar button.allin-btn {
+  background: #4a3a6a;
+}
+
+.actions-bar button.allin-btn:hover {
+  background: #5a4a7a;
+}
+
+.card-image {
+  display: inline-block;
+}

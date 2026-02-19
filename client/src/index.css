@@ -1,0 +1,47 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #0d3b2c;
+  color: #e8e0d5;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  background: #1a5c44;
+  color: #e8e0d5;
+}
+
+button:hover {
+  background: #227a5a;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input {
+  font: inherit;
+  padding: 0.5rem;
+  border: 1px solid #2d6b52;
+  border-radius: 6px;
+  background: #0d3b2c;
+  color: #e8e0d5;
+}
+
+input::placeholder {
+  color: #6b8f7a;
+}

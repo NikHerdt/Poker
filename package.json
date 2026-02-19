@@ -1,0 +1,10 @@
+{
+  "name": "poker",
+  "private": true,
+  "scripts": {
+    "server": "cd server && npm run start",
+    "server:dev": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "client:build": "cd client && npm run build"
+  }
+}
