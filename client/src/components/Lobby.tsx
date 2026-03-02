@@ -24,12 +24,15 @@ export function Lobby({
   const [createName, setCreateName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [joinName, setJoinName] = useState('');
-  const [createConfig, setCreateConfig] = useState({ smallBlind: 5, bigBlind: 10, buyIn: 200 });
+  const [createConfig, setCreateConfig] = useState({ smallBlind: '5', bigBlind: '10', buyIn: '200' });
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     const name = createName.trim() || 'Player';
-    onCreateRoom?.(name, createConfig);
+    const smallBlind = Math.max(1, Math.floor(Number(createConfig.smallBlind)) || 5);
+    const bigBlind = Math.max(1, Math.floor(Number(createConfig.bigBlind)) || 10);
+    const buyIn = Math.max(1, Math.floor(Number(createConfig.buyIn)) || 200);
+    onCreateRoom?.(name, { smallBlind, bigBlind, buyIn });
   };
 
   const handleJoin = (e: React.FormEvent) => {
@@ -83,21 +86,21 @@ export function Lobby({
             min={1}
             placeholder="SB"
             value={createConfig.smallBlind}
-            onChange={(e) => setCreateConfig((c) => ({ ...c, smallBlind: Number(e.target.value) || 5 }))}
+            onChange={(e) => setCreateConfig((c) => ({ ...c, smallBlind: e.target.value }))}
           />
           <input
             type="number"
             min={1}
             placeholder="BB"
             value={createConfig.bigBlind}
-            onChange={(e) => setCreateConfig((c) => ({ ...c, bigBlind: Number(e.target.value) || 10 }))}
+            onChange={(e) => setCreateConfig((c) => ({ ...c, bigBlind: e.target.value }))}
           />
           <input
             type="number"
             min={1}
             placeholder="Buy-in"
             value={createConfig.buyIn}
-            onChange={(e) => setCreateConfig((c) => ({ ...c, buyIn: Number(e.target.value) || 200 }))}
+            onChange={(e) => setCreateConfig((c) => ({ ...c, buyIn: e.target.value }))}
           />
         </div>
         <button type="submit" className="primary">Create room</button>
