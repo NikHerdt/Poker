@@ -22,6 +22,9 @@ export interface UseGameSocketResult {
   sendRebuyYes: () => void;
   sendRebuyNo: () => void;
   sendRequestRebuy: () => void;
+  sendPloVoteStart: () => void;
+  sendPloVoteYes: () => void;
+  sendPloVoteNo: () => void;
 }
 
 export function useGameSocket(): UseGameSocketResult {
@@ -102,6 +105,18 @@ export function useGameSocket(): UseGameSocketResult {
     if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'request_rebuy' });
   }, [send]);
 
+  const sendPloVoteStart = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'plo_vote_start' });
+  }, [send]);
+
+  const sendPloVoteYes = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'plo_vote_yes' });
+  }, [send]);
+
+  const sendPloVoteNo = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'plo_vote_no' });
+  }, [send]);
+
   const clearError = useCallback(() => setError(null), []);
 
   useEffect(() => {
@@ -165,5 +180,8 @@ export function useGameSocket(): UseGameSocketResult {
     sendRebuyYes,
     sendRebuyNo,
     sendRequestRebuy,
+    sendPloVoteStart,
+    sendPloVoteYes,
+    sendPloVoteNo,
   };
 }

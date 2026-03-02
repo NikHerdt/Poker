@@ -295,6 +295,62 @@
   cursor: not-allowed;
 }
 
+.result-panel .plo-vote-section {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.result-panel .plo-vote-label {
+  margin: 0 0 0.35rem;
+  color: #b8c4b8;
+  font-size: 0.9rem;
+}
+
+.result-panel .plo-vote-tally {
+  font-size: 0.85rem;
+  color: #8a9a8a;
+  margin-bottom: 0.5rem;
+}
+
+.result-panel .plo-vote-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.result-panel .plo-vote-btn,
+.result-panel .plo-vote-yes-btn,
+.result-panel .plo-vote-no-btn {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.result-panel .plo-vote-btn {
+  background: #2a5a6a;
+}
+
+.result-panel .plo-vote-btn:hover {
+  background: #346a7a;
+}
+
+.result-panel .plo-vote-yes-btn {
+  background: #1a6b4a;
+}
+
+.result-panel .plo-vote-yes-btn:hover {
+  background: #208a5c;
+}
+
+.result-panel .plo-vote-no-btn {
+  background: rgba(120, 80, 80, 0.9);
+}
+
+.result-panel .plo-vote-no-btn:hover {
+  background: rgba(140, 90, 90, 1);
+}
+
 .player-seat .buy-in-count {
   font-size: 0.8rem;
   color: #8a9a8a;

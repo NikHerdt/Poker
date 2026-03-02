@@ -7,7 +7,7 @@ import {
   DEFAULT_BIG_BLIND,
   DEFAULT_BUY_IN,
 } from '../shared/constants';
-import { evaluateHand, compareHandResults } from './hand-eval';
+import { evaluateHand, evaluateHandOmaha, compareHandResults } from './hand-eval';
 
 export function createDeck(): Card[] {
   const deck: Card[] = [];
@@ -61,10 +61,13 @@ export function startHand(
   config: Partial<RoomConfig>,
   handNumber: number,
   previousChips?: Record<string, number>,
-  previousBuyInCounts?: Record<string, number>
+  previousBuyInCounts?: Record<string, number>,
+  isPlo?: boolean
 ): GameState {
-  const smallBlind = config.smallBlind ?? DEFAULT_SMALL_BLIND;
-  const bigBlind = config.bigBlind ?? DEFAULT_BIG_BLIND;
+  const configSmallBlind = config.smallBlind ?? DEFAULT_SMALL_BLIND;
+  const configBigBlind = config.bigBlind ?? DEFAULT_BIG_BLIND;
+  const smallBlind = isPlo ? 2 * configSmallBlind : configSmallBlind;
+  const bigBlind = isPlo ? 2 * configBigBlind : configBigBlind;
   const buyIn = config.buyIn ?? DEFAULT_BUY_IN;
 
   if (playerIds.length < MIN_PLAYERS) {
@@ -90,11 +93,56 @@ export function startHand(
     );
   });
 
-  for (let i = 0; i < 2; i++) {
+  const holeCardCount = isPlo ? 4 : 2;
+  for (let i = 0; i < holeCardCount; i++) {
     for (let p = 0; p < players.length; p++) {
       const card = deck.pop()!;
       players[p].holeCards.push(card);
     }
+  }
+
+  if (isPlo) {
+    const doubleBb = 2 * configBigBlind;
+    for (const p of players) {
+      const post = Math.min(doubleBb, p.chips);
+      p.chips -= post;
+      p.currentBet = post;
+      p.totalBetThisHand = post;
+      if (p.chips <= 0) p.allIn = true;
+    }
+    const potAmount = players.reduce((sum, p) => sum + p.totalBetThisHand, 0);
+    deck.pop();
+    const communityCards: Card[] = [deck.pop()!, deck.pop()!, deck.pop()!];
+    for (const p of players) {
+      p.currentBet = 0;
+      p.hasActedThisRound = false;
+    }
+    let firstToAct = (dealerIndex + 1) % players.length;
+    while (players[firstToAct].folded && players.some((p) => !p.folded)) {
+      firstToAct = (firstToAct + 1) % players.length;
+    }
+    let actingIndex = firstToAct;
+    do {
+      const p = players[actingIndex];
+      if (!p.folded && !p.allIn && p.chips > 0) break;
+      actingIndex = (actingIndex + 1) % players.length;
+    } while (actingIndex !== firstToAct);
+    if (players[actingIndex].folded || players[actingIndex].allIn || players[actingIndex].chips <= 0) {
+      actingIndex = firstToAct;
+    }
+    return {
+      phase: 'flop',
+      communityCards,
+      players,
+      pots: [{ amount: potAmount, eligiblePlayerIds: playerIds }],
+      currentBet: 0,
+      minRaise: bigBlind,
+      actingPlayerIndex: actingIndex,
+      firstToActThisRound: firstToAct,
+      deck,
+      handNumber,
+      isPlo: true,
+    };
   }
 
   const sbPlayer = players[sbIndex];
@@ -135,6 +183,7 @@ export function startHand(
     firstToActThisRound,
     deck,
     handNumber,
+    isPlo: false,
   };
 }
 
@@ -307,8 +356,16 @@ export function applyAction(
   } else if (action.type === 'raise' || action.type === 'all_in') {
     const oldCurrentBet = state.currentBet;
     const minRaiseTo = state.currentBet + state.minRaise;
-    const maxRaiseTo = player.currentBet + player.chips;
+    let maxRaiseTo = player.currentBet + player.chips;
+    if (state.isPlo) {
+      const potTotal = state.pots.reduce((s, pot) => s + pot.amount, 0);
+      const currentBetsTotal = state.players.reduce((s, p) => s + p.currentBet, 0);
+      const potForLimit = potTotal + currentBetsTotal;
+      const potMaxRaiseTo = player.currentBet + potForLimit;
+      maxRaiseTo = Math.min(potMaxRaiseTo, player.currentBet + player.chips);
+    }
     const raiseTo = action.amount ?? Math.min(maxRaiseTo, action.type === 'all_in' ? maxRaiseTo : minRaiseTo);
+    if (raiseTo > maxRaiseTo) throw new Error('Raise exceeds pot limit');
     const toPay = Math.min(Math.max(raiseTo - player.currentBet, 0), player.chips);
     player.chips -= toPay;
     player.currentBet += toPay;
@@ -364,8 +421,9 @@ function runShowdown(state: GameState, bigBlind: number, smallBlind: number): vo
 
   const inHand = state.players.filter((p) => !p.folded);
   const handResults = new Map<string, ReturnType<typeof evaluateHand>>();
+  const evaluator = state.isPlo ? evaluateHandOmaha : evaluateHand;
   for (const p of inHand) {
-    handResults.set(p.id, evaluateHand(p.holeCards, state.communityCards));
+    handResults.set(p.id, evaluator(p.holeCards, state.communityCards));
   }
 
   const winnerIds: string[] = [];
@@ -404,8 +462,10 @@ function runShowdown(state: GameState, bigBlind: number, smallBlind: number): vo
   state.lastWinningHand = lastWinningHand;
 
   const bonuses: GameState['houseRuleBonuses'] = [];
-  const bigBlindCfg = state.players[0] ? (state.players[0].isBigBlind ? bigBlind : 0) : 0;
-  const smallBlindCfg = smallBlind;
+  const effectiveBigBlind = state.isPlo ? bigBlind * 2 : bigBlind;
+  const effectiveSmallBlind = state.isPlo ? smallBlind * 2 : smallBlind;
+  const bigBlindCfg = state.players[0] ? (state.players[0].isBigBlind ? effectiveBigBlind : 0) : 0;
+  const smallBlindCfg = effectiveSmallBlind;
   for (const wid of winnerIds) {
     const player = state.players.find((p) => p.id === wid)!;
     const result = handResults.get(wid)!;

@@ -87,6 +87,8 @@ export interface GameState {
   lastWinningHand?: HandResult;
   houseRuleBonuses?: { playerId: string; type: '72' | '69'; amount: number }[];
   lastAction?: LastActionInfo;
+  /** This hand is Pot Limit Omaha (4 cards, pot limit, Omaha eval). */
+  isPlo?: boolean;
 }
 
 export interface RoomState {
@@ -102,6 +104,13 @@ export interface RoomState {
   rebuyRequested?: Record<string, boolean>;
   /** Persisted buy-in count when player is not in current hand (e.g. spectator). */
   playerIdToBuyInCount?: Record<string, number>;
+  /** PLO vote in progress when hand is finished. */
+  ploVote?: { votes: Record<string, 'yes' | 'no'> };
+  ploVoteInitiator?: string;
+  /** When set, next hand(s) are PLO until this player would be dealer again (then cleared; that hand is Hold'em). */
+  ploRoundDealerId?: string;
+  /** True once the first PLO hand (where anchor is dealer) has started; used to detect second time anchor is dealer. */
+  ploRoundAnchorHasBeenDealer?: boolean;
 }
 
 export type ClientMessageType =
@@ -113,7 +122,10 @@ export type ClientMessageType =
   | 'field_goal_attempt'
   | 'rebuy_yes'
   | 'rebuy_no'
-  | 'request_rebuy';
+  | 'request_rebuy'
+  | 'plo_vote_start'
+  | 'plo_vote_yes'
+  | 'plo_vote_no';
 
 export type ServerMessageType =
   | 'room_created'

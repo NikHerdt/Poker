@@ -36,8 +36,15 @@ export function Table({ state, playerId, socket }: TableProps) {
   const toCall = me ? Math.max(0, game.currentBet - me.currentBet) : 0;
   const facingAllIn = game.players.some((p: Player) => p.id !== playerId && p.allIn);
   const bigBlind = state.config.bigBlind;
-  const raiseMin = Math.max(bigBlind, game.currentBet + 1);
-  const raiseMax = me ? me.currentBet + me.chips : raiseMin;
+  let raiseMin = Math.max(bigBlind, game.currentBet + 1);
+  let raiseMax = me ? me.currentBet + me.chips : raiseMin;
+  if (game.isPlo && me) {
+    const currentBetsTotal = game.players.reduce((s: number, p: Player) => s + p.currentBet, 0);
+    const potForLimit = totalPot + currentBetsTotal;
+    const potLimitMax = me.currentBet + potForLimit;
+    raiseMax = Math.min(potLimitMax, me.currentBet + me.chips);
+    raiseMin = Math.max(raiseMin, game.currentBet + 1);
+  }
   const canRaise = me && me.chips > 0 && raiseMax > game.currentBet && !facingAllIn;
   const effectiveRaiseMin = Math.min(raiseMin, raiseMax);
   const effectiveRaiseMax = Math.max(raiseMin, raiseMax);
@@ -66,7 +73,11 @@ export function Table({ state, playerId, socket }: TableProps) {
   return (
     <div className="table-page">
       <div className="table-header">
-        <span className="phase">Hand #{game.handNumber} – {game.phase}</span>
+        <span className="phase">
+          Hand #{game.handNumber}
+          {game.isPlo ? ' – PLO – ' : ' – '}
+          {game.phase}
+        </span>
         <button type="button" className="leave-btn" onClick={socket.leaveRoom}>
           Leave
         </button>
@@ -174,6 +185,35 @@ export function Table({ state, playerId, socket }: TableProps) {
             }
             return null;
           })()}
+          {!state.ploVote && (
+            <div className="plo-vote-section">
+              <button type="button" className="plo-vote-btn" onClick={socket.sendPloVoteStart}>
+                Start PLO vote
+              </button>
+            </div>
+          )}
+          {state.ploVote && (
+            <div className="plo-vote-section">
+              <p className="plo-vote-label">
+                Vote for next round to be PLO (Pot Limit Omaha). Majority wins.
+                {state.ploVoteInitiator && state.playerIdToName[state.ploVoteInitiator] && (
+                  <span> Started by {state.playerIdToName[state.ploVoteInitiator]}.</span>
+                )}
+              </p>
+              <div className="plo-vote-tally">
+                Yes: {game.players.filter((p: Player) => state.ploVote!.votes[p.id] === 'yes').length},{' '}
+                No: {game.players.filter((p: Player) => state.ploVote!.votes[p.id] === 'no').length}
+              </div>
+              <div className="plo-vote-buttons">
+                <button type="button" className="plo-vote-yes-btn" onClick={socket.sendPloVoteYes}>
+                  Yes
+                </button>
+                <button type="button" className="plo-vote-no-btn" onClick={socket.sendPloVoteNo}>
+                  No
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

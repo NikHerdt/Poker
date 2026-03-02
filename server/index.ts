@@ -155,14 +155,34 @@ wss.on('connection', (ws) => {
           return;
         }
 
+        if (isFinished) {
+          room.state.ploVote = undefined;
+          room.state.ploVoteInitiator = undefined;
+        }
+
         const handNumber = isFinished && room.state.game ? room.state.game.handNumber + 1 : 1;
+        const nextDealerIndex = (handNumber - 1) % activePlayerIds.length;
+        const nextDealerId = activePlayerIds[nextDealerIndex];
+        let isPlo = Boolean(room.state.ploRoundDealerId);
+        if (room.state.ploRoundDealerId && nextDealerId === room.state.ploRoundDealerId) {
+          if (room.state.ploRoundAnchorHasBeenDealer) {
+            delete room.state.ploRoundDealerId;
+            delete room.state.ploRoundAnchorHasBeenDealer;
+            isPlo = false;
+          } else {
+            room.state.ploRoundAnchorHasBeenDealer = true;
+            isPlo = true;
+          }
+        }
+
         const game = startHand(
           activePlayerIds,
           room.state.playerIdToName,
           room.state.config,
           handNumber,
           previousChips,
-          previousBuyInCounts
+          previousBuyInCounts,
+          isPlo
         );
         room.state.game = game;
         if (!room.state.playerIdToBuyInCount) room.state.playerIdToBuyInCount = {};
@@ -262,6 +282,43 @@ wss.on('connection', (ws) => {
           room.state.rebuyRequested[currentPlayerId] = true;
           broadcast(currentRoomCode, { type: 'room_state', state: room.state });
         }
+        return;
+      }
+
+      if (msg.type === 'plo_vote_start') {
+        if (!currentRoomCode || !currentPlayerId) return;
+        const room = getRoom(currentRoomCode);
+        if (!room?.state.game || room.state.game.phase !== 'finished') {
+          ws.send(JSON.stringify({ type: 'error', error: 'PLO vote only when hand is finished' }));
+          return;
+        }
+        if (room.state.ploVote) return;
+        room.state.ploVote = { votes: {} };
+        room.state.ploVoteInitiator = currentPlayerId;
+        broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+        return;
+      }
+
+      if (msg.type === 'plo_vote_yes' || msg.type === 'plo_vote_no') {
+        if (!currentRoomCode || !currentPlayerId) return;
+        const room = getRoom(currentRoomCode);
+        if (!room?.state.game || room.state.game.phase !== 'finished' || !room.state.ploVote) return;
+        const vote = msg.type === 'plo_vote_yes' ? 'yes' : 'no';
+        room.state.ploVote.votes[currentPlayerId] = vote;
+        const gamePlayers = room.state.game.players;
+        const total = gamePlayers.length;
+        const yesCount = gamePlayers.filter((p) => room.state.ploVote!.votes[p.id] === 'yes').length;
+        const noCount = gamePlayers.filter((p) => room.state.ploVote!.votes[p.id] === 'no').length;
+        const voted = yesCount + noCount;
+        if (voted === total && yesCount > total / 2) {
+          const nextHandNumber = room.state.game!.handNumber + 1;
+          const nextDealerIdx = (nextHandNumber - 1) % gamePlayers.length;
+          room.state.ploRoundDealerId = gamePlayers[nextDealerIdx].id;
+          room.state.ploRoundAnchorHasBeenDealer = false;
+          room.state.ploVote = undefined;
+          room.state.ploVoteInitiator = undefined;
+        }
+        broadcast(currentRoomCode, { type: 'room_state', state: room.state });
         return;
       }
 

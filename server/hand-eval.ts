@@ -201,6 +201,44 @@ export function evaluateHand(holeCards: Card[], communityCards: Card[]): HandRes
   return best;
 }
 
+export function evaluateHandOmaha(holeCards: Card[], communityCards: Card[]): HandResult {
+  if (holeCards.length < 2 || communityCards.length < 3) {
+    return {
+      rank: 'high_card',
+      rankValue: HAND_RANK_ORDER.indexOf('high_card'),
+      tiebreak: sortByValue(holeCards.slice(0, 2)).map(cardValue),
+      cards: holeCards.slice(0, 2),
+      pairCountIn7: holeCards.length + communityCards.length >= 7 ? countPairsInSeven([...holeCards, ...communityCards]) : undefined,
+    };
+  }
+  const holeCombos = combinations(holeCards, 2);
+  const boardCombos = combinations(communityCards, 3);
+  let best: HandResult | null = null;
+
+  for (const twoFromHole of holeCombos) {
+    for (const threeFromBoard of boardCombos) {
+      const five = [...twoFromHole, ...threeFromBoard];
+      const ev = evaluateFive(five) as HandResult;
+      const sevenForPairs = [...twoFromHole, ...communityCards];
+      ev.pairCountIn7 = countPairsInSeven(sevenForPairs);
+
+      if (!best || compareHandResults(ev, best) > 0) {
+        best = { ...ev, cards: five };
+      }
+    }
+  }
+
+  if (!best) throw new Error('No hand evaluated');
+
+  const holeValues = new Set(holeCards.map(cardValue));
+  const is72 = holeValues.has(7) && holeValues.has(2) && best.rank === 'high_card';
+  const is69 = holeValues.has(6) && holeValues.has(9) && best.rank === 'high_card';
+  best.is72 = is72;
+  best.is69 = is69;
+
+  return best;
+}
+
 export function compareHandResults(a: HandResult, b: HandResult): number {
   if (a.rankValue !== b.rankValue) return a.rankValue - b.rankValue;
 
