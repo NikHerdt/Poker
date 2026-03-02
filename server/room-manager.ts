@@ -55,8 +55,8 @@ export function createRoom(hostId: string, hostName: string, config?: Partial<Ro
 export function joinRoom(roomCode: string, playerId: string, playerName: string): RoomState | null {
   const room = rooms.get(roomCode.toUpperCase());
   if (!room) return null;
-  if (room.state.game !== null) return null;
   if (room.playerIds.size >= MAX_PLAYERS) return null;
+  /* Allow join during game; joiner is a spectator until next hand (and only plays if position does not split dealer/SB/BB). */
 
   room.playerIds.add(playerId);
   room.state.playerIdToName[playerId] = playerName;

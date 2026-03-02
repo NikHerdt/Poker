@@ -1,13 +1,42 @@
+:root {
+  --bg-dark: #0a1f18;
+  --bg-mid: #0d2e24;
+  --bg-felt: #0c4a35;
+  --bg-felt-light: #0e5c42;
+  --bg-card: rgba(0, 0, 0, 0.28);
+  --bg-card-hover: rgba(0, 0, 0, 0.38);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-mid: rgba(255, 255, 255, 0.1);
+  --text-primary: #f2efe8;
+  --text-secondary: #b5c4b8;
+  --text-muted: #7d8f84;
+  --accent-green: #1d7a52;
+  --accent-green-hover: #238f61;
+  --accent-red: #b85c4c;
+  --accent-red-hover: #c96d5c;
+  --accent-gold: #c9b87a;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --font: 'Outfit', system-ui, -apple-system, sans-serif;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #0d3b2c;
-  color: #e8e0d5;
+  font-family: var(--font);
+  font-weight: 400;
+  background: var(--bg-dark);
+  color: var(--text-primary);
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
@@ -15,17 +44,19 @@ body {
 }
 
 button {
-  font: inherit;
+  font-family: var(--font);
+  font-weight: 500;
   cursor: pointer;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 0.5rem 1rem;
-  background: #1a5c44;
-  color: #e8e0d5;
+  background: var(--accent-green);
+  color: var(--text-primary);
+  transition: background 0.15s ease, opacity 0.15s ease;
 }
 
 button:hover {
-  background: #227a5a;
+  background: var(--accent-green-hover);
 }
 
 button:disabled {
@@ -34,14 +65,62 @@ button:disabled {
 }
 
 input {
-  font: inherit;
-  padding: 0.5rem;
-  border: 1px solid #2d6b52;
-  border-radius: 6px;
-  background: #0d3b2c;
-  color: #e8e0d5;
+  font-family: var(--font);
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-sm);
+  background: var(--bg-mid);
+  color: var(--text-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--accent-green);
+  box-shadow: 0 0 0 2px rgba(29, 122, 82, 0.25);
 }
 
 input::placeholder {
-  color: #6b8f7a;
+  color: var(--text-muted);
+}
+
+input[type="number"] {
+  min-width: 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 1.25rem;
+}
+
+.app-alert {
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 1rem;
+  background: rgba(184, 92, 76, 0.18);
+  border: 1px solid rgba(184, 92, 76, 0.35);
+  border-radius: var(--radius-md);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+}
+
+.app-alert button {
+  background: rgba(255, 255, 255, 0.12);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.app-alert button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.app-connecting {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  padding: 0.5rem 0;
 }

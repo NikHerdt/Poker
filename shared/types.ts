@@ -111,6 +111,8 @@ export interface RoomState {
   ploRoundDealerId?: string;
   /** True once the first PLO hand (where anchor is dealer) has started; used to detect second time anchor is dealer. */
   ploRoundAnchorHasBeenDealer?: boolean;
+  /** True after a PLO vote was concluded this hand; hide PLO vote UI until next hand. */
+  ploVoteConcluded?: boolean;
 }
 
 export type ClientMessageType =

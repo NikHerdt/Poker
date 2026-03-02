@@ -1,7 +1,7 @@
 .fieldgoal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -9,24 +9,25 @@
 }
 
 .fieldgoal-modal {
-  background: linear-gradient(180deg, #1a3d30 0%, #0d2a20 100%);
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
+  background: linear-gradient(180deg, var(--bg-mid) 0%, var(--bg-dark) 100%);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-lg);
   padding: 2rem;
   min-width: 320px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
 }
 
 .fieldgoal-title {
   margin: 0 0 1.5rem;
-  font-size: 1.5rem;
-  color: #e8e8d8;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--text-primary);
   text-align: center;
 }
 
 .fieldgoal-instruction {
   margin: 0 0 1rem;
-  color: #b8c4b8;
+  color: var(--text-secondary);
   font-size: 0.95rem;
   text-align: center;
 }
@@ -136,25 +137,26 @@
 }
 
 .fieldgoal-success {
-  color: #60c080;
+  color: #50b070;
   font-size: 1.25rem;
   font-weight: 600;
 }
 
 .fieldgoal-miss {
-  color: #c07060;
+  color: var(--accent-red);
   font-size: 1.25rem;
   font-weight: 600;
 }
 
 .fieldgoal-btn {
   margin-top: 1rem;
-  padding: 0.5rem 1rem;
-  background: #2d5c4a;
-  color: #e8e0d5;
+  padding: 0.55rem 1.1rem;
+  background: var(--accent-green);
+  color: var(--text-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  font-weight: 500;
 }
 
 .fieldgoal-btn:disabled {

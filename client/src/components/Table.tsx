@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { RoomState, Card, Player, GameState } from 'shared/types';
 import type { UseGameSocketResult } from '../hooks/useGameSocket';
+import { evaluateHand, evaluateHandOmaha, formatHandDescription } from 'shared/hand-eval';
 import { CardImage } from './CardImage';
 import { FieldGoalMinigame } from './FieldGoalMinigame';
 import './Table.css';
@@ -65,6 +66,19 @@ export function Table({ state, playerId, socket }: TableProps) {
     game.lastAction?.playerId !== playerId;
   const [showFieldGoalMinigame, setShowFieldGoalMinigame] = useState(false);
 
+  const myHandDescription = useMemo(() => {
+    if (!me?.holeCards?.length || me.folded) return null;
+    const community = game.communityCards ?? [];
+    try {
+      const result = game.isPlo
+        ? evaluateHandOmaha(me.holeCards, community)
+        : evaluateHand(me.holeCards, community);
+      return formatHandDescription(result);
+    } catch {
+      return null;
+    }
+  }, [me?.id, me?.holeCards, me?.folded, game.communityCards, game.isPlo]);
+
   const handleFieldGoalComplete = (success: boolean) => {
     socket.sendFieldGoalAttempt(success);
     setShowFieldGoalMinigame(false);
@@ -104,6 +118,7 @@ export function Table({ state, playerId, socket }: TableProps) {
               isActing={game.actingPlayerIndex >= 0 && game.players[game.actingPlayerIndex]?.id === p.id}
               name={state.playerIdToName[p.id] ?? p.name}
               phase={game.phase}
+              handDescription={p.id === playerId ? myHandDescription : null}
             />
           ))}
         </div>
@@ -185,14 +200,14 @@ export function Table({ state, playerId, socket }: TableProps) {
             }
             return null;
           })()}
-          {!state.ploVote && (
+          {!state.ploVoteConcluded && !state.ploVote && (
             <div className="plo-vote-section">
               <button type="button" className="plo-vote-btn" onClick={socket.sendPloVoteStart}>
                 Start PLO vote
               </button>
             </div>
           )}
-          {state.ploVote && (
+          {!state.ploVoteConcluded && state.ploVote && (
             <div className="plo-vote-section">
               <p className="plo-vote-label">
                 Vote for next round to be PLO (Pot Limit Omaha). Majority wins.
@@ -301,6 +316,7 @@ function PlayerSeat({
   isActing,
   name,
   phase,
+  handDescription,
 }: {
   player: Player;
   isYou: boolean;
@@ -308,6 +324,7 @@ function PlayerSeat({
   isActing: boolean;
   name: string;
   phase: GameState['phase'];
+  handDescription: string | null;
 }) {
   const status: string[] = [];
   if (player.folded) status.push('Folded');
@@ -340,6 +357,9 @@ function PlayerSeat({
           <CardImage key={i} card={c} faceDown={!showCards} size="hand" />
         ))}
       </div>
+      {handDescription && !player.folded && (
+        <div className="hand-description">{handDescription}</div>
+      )}
     </div>
   );
 }

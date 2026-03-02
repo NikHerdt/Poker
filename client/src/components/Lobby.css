@@ -1,110 +1,151 @@
 .lobby-page {
-  max-width: 420px;
+  max-width: 440px;
   margin: 0 auto;
-  padding: 1.5rem 0;
+  padding: 2rem 0;
 }
 
 .lobby-page h1 {
-  font-size: 1.75rem;
-  margin-bottom: 1.5rem;
-  color: #e8e8d8;
-  font-weight: 600;
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 1.75rem;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
 }
 
 .lobby-section {
-  background: rgba(0,0,0,0.2);
-  border-radius: 12px;
-  padding: 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
   margin-bottom: 1.5rem;
-  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: var(--shadow-sm);
+}
+
+.lobby-section:last-child {
+  margin-bottom: 0;
+}
+
+.lobby-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .lobby-section h2 {
-  font-size: 1rem;
-  margin-bottom: 1rem;
-  color: #b8c4b8;
-  font-weight: 500;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
 }
 
-.lobby-section input {
+.lobby-section .field {
+  min-width: 0;
+}
+
+.lobby-section .field input {
+  display: block;
   width: 100%;
-  margin-bottom: 0.75rem;
-  padding: 0.6rem 0.75rem;
+  padding: 0.65rem 0.9rem;
+  font-size: 1rem;
+  box-sizing: border-box;
 }
 
 .lobby-section .row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  min-width: 0;
 }
 
-.lobby-section button {
-  padding: 0.6rem 1.1rem;
-  border-radius: 8px;
-  font-weight: 500;
+.lobby-section .row-cell {
+  min-width: 0;
+}
+
+.lobby-section .row-cell input {
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  font-size: 1rem;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 .lobby-section button.primary {
-  background: #1a6b4a;
+  width: 100%;
+  margin-top: 0;
+  padding: 0.7rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  background: var(--accent-green);
+  border-radius: var(--radius-sm);
 }
 
 .lobby-section button.primary:hover {
-  background: #208a5c;
+  background: var(--accent-green-hover);
 }
 
 .room-view {
-  max-width: 420px;
+  max-width: 440px;
   margin: 0 auto;
-  padding: 1.5rem 0;
+  padding: 2rem 0;
 }
 
 .room-view h1 {
   font-size: 1.5rem;
+  font-weight: 700;
   margin-bottom: 0.5rem;
-  color: #e8e8d8;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
 }
 
 .room-view .code {
-  font-size: 1.75rem;
+  font-size: 1.9rem;
   font-weight: 700;
-  letter-spacing: 0.2em;
-  color: #fff;
+  letter-spacing: 0.25em;
+  color: var(--text-primary);
   margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-family: var(--font);
 }
 
 .room-view .meta {
-  color: #b8c4b8;
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
   font-size: 0.95rem;
 }
 
 .room-view .hint {
   font-size: 0.9rem;
-  color: #8a9a8a;
-  margin-bottom: 1.25rem;
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
 }
 
 .room-view .actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.6rem;
   flex-wrap: wrap;
 }
 
 .room-view .actions .start-btn {
-  background: #1a6b4a;
+  background: var(--accent-green);
+  padding: 0.6rem 1.2rem;
+  font-weight: 600;
 }
 
 .room-view .actions .start-btn:hover {
-  background: #208a5c;
+  background: var(--accent-green-hover);
 }
 
 .room-view .actions .leave-btn {
-  background: rgba(140, 70, 60, 0.9);
+  background: var(--accent-red);
+  padding: 0.6rem 1.2rem;
 }
 
 .room-view .actions .leave-btn:hover {
-  background: rgba(160, 85, 75, 1);
+  background: var(--accent-red-hover);
 }

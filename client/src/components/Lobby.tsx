@@ -72,55 +72,67 @@ export function Lobby({
     <div className="lobby-page">
       <h1>Poker</h1>
 
-      <form onSubmit={handleCreate} className="lobby-section">
+      <form onSubmit={handleCreate} className="lobby-section lobby-form">
         <h2>Create room</h2>
-        <input
-          type="text"
-          placeholder="Your name"
-          value={createName}
-          onChange={(e) => setCreateName(e.target.value)}
-        />
+        <div className="field">
+          <input
+            type="text"
+            placeholder="Your name"
+            value={createName}
+            onChange={(e) => setCreateName(e.target.value)}
+          />
+        </div>
         <div className="row">
-          <input
-            type="number"
-            min={1}
-            placeholder="SB"
-            value={createConfig.smallBlind}
-            onChange={(e) => setCreateConfig((c) => ({ ...c, smallBlind: e.target.value }))}
-          />
-          <input
-            type="number"
-            min={1}
-            placeholder="BB"
-            value={createConfig.bigBlind}
-            onChange={(e) => setCreateConfig((c) => ({ ...c, bigBlind: e.target.value }))}
-          />
-          <input
-            type="number"
-            min={1}
-            placeholder="Buy-in"
-            value={createConfig.buyIn}
-            onChange={(e) => setCreateConfig((c) => ({ ...c, buyIn: e.target.value }))}
-          />
+          <div className="row-cell">
+            <input
+              type="number"
+              min={1}
+              placeholder="SB"
+              value={createConfig.smallBlind}
+              onChange={(e) => setCreateConfig((c) => ({ ...c, smallBlind: e.target.value }))}
+            />
+          </div>
+          <div className="row-cell">
+            <input
+              type="number"
+              min={1}
+              placeholder="BB"
+              value={createConfig.bigBlind}
+              onChange={(e) => setCreateConfig((c) => ({ ...c, bigBlind: e.target.value }))}
+            />
+          </div>
+          <div className="row-cell">
+            <input
+              type="number"
+              min={1}
+              placeholder="Buy-in"
+              value={createConfig.buyIn}
+              onChange={(e) => setCreateConfig((c) => ({ ...c, buyIn: e.target.value }))}
+            />
+          </div>
         </div>
         <button type="submit" className="primary">Create room</button>
       </form>
 
-      <form onSubmit={handleJoin} className="lobby-section">
+      <form onSubmit={handleJoin} className="lobby-section lobby-form">
         <h2>Join room</h2>
-        <input
-          type="text"
-          placeholder="Room code"
-          value={joinCode}
-          onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-          maxLength={6}
-        />
-        <input
-          type="text"
-          placeholder="Your name"
-          value={joinName}
-          onChange={(e) => setJoinName(e.target.value)}
-        />
+        <div className="field">
+          <input
+            type="text"
+            placeholder="Room code"
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+            maxLength={6}
+          />
+        </div>
+        <div className="field">
+          <input
+            type="text"
+            placeholder="Your name"
+            value={joinName}
+            onChange={(e) => setJoinName(e.target.value)}
+          />
+        </div>
         <button type="submit" className="primary">Join</button>
       </form>
     </div>

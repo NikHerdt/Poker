@@ -7,20 +7,9 @@ export default function App() {
   const { state, playerId, error, connected, clearError, leaveRoom } = socket;
 
   return (
-    <div style={{ minHeight: '100vh', padding: '1rem' }}>
+    <div className="app-shell">
       {error && (
-        <div
-          role="alert"
-          style={{
-            padding: '0.75rem 1rem',
-            marginBottom: '1rem',
-            background: '#5c2a2a',
-            borderRadius: 8,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
+        <div role="alert" className="app-alert">
           <span>{error}</span>
           <button type="button" onClick={clearError}>
             Dismiss
@@ -28,7 +17,7 @@ export default function App() {
         </div>
       )}
       {!connected && (
-        <p style={{ color: '#b0a090' }}>Connecting to server...</p>
+        <p className="app-connecting">Connecting to server...</p>
       )}
       {connected && !state && (
         <Lobby

@@ -106,6 +106,7 @@ wss.on('connection', (ws) => {
         let previousChips: Record<string, number> | undefined;
         let previousBuyInCounts: Record<string, number> | undefined;
         const buyIn = room.state.config.buyIn ?? 200;
+        const handNumber = isFinished && room.state.game ? room.state.game.handNumber + 1 : 1;
 
         if (isNewGame) {
           activePlayerIds = [...room.playerIds];
@@ -121,13 +122,11 @@ wss.on('connection', (ws) => {
           const spectatorRebuy = [...room.playerIds].filter(
             (id) => !prevGame.players.some((p) => p.id === id) && requested[id]
           );
+          const newJoiners = [...room.playerIds].filter(
+            (id) => !prevGame.players.some((p) => p.id === id) && !spectatorRebuy.includes(id)
+          );
 
           activePlayerIds = [...withChips, ...zeroRebuyYes, ...spectatorRebuy];
-
-          if (activePlayerIds.length < MIN_PLAYERS) {
-            ws.send(JSON.stringify({ type: 'error', error: 'Not enough players to start next hand (need at least 2 with chips or rebuying)' }));
-            return;
-          }
 
           previousChips = {};
           previousBuyInCounts = {};
@@ -146,6 +145,23 @@ wss.on('connection', (ws) => {
             previousBuyInCounts[id] = (buyInCounts[id] ?? 1) + 1;
           }
 
+          for (const id of newJoiners) {
+            const n = activePlayerIds.length + 1;
+            const newPlayerIndex = n - 1;
+            const dealerIdx = (handNumber - 1) % n;
+            const sbIdx = (dealerIdx + 1) % n;
+            const bbIdx = (dealerIdx + 2) % n;
+            if (newPlayerIndex === dealerIdx || newPlayerIndex === sbIdx || newPlayerIndex === bbIdx) continue;
+            activePlayerIds.push(id);
+            previousChips[id] = buyIn;
+            previousBuyInCounts[id] = buyInCounts[id] ?? 1;
+          }
+
+          if (activePlayerIds.length < MIN_PLAYERS) {
+            ws.send(JSON.stringify({ type: 'error', error: 'Not enough players to start next hand (need at least 2 with chips or rebuying)' }));
+            return;
+          }
+
           room.state.rebuyDecisions = undefined;
           room.state.rebuyRequested = undefined;
         }
@@ -158,9 +174,9 @@ wss.on('connection', (ws) => {
         if (isFinished) {
           room.state.ploVote = undefined;
           room.state.ploVoteInitiator = undefined;
+          delete room.state.ploVoteConcluded;
         }
 
-        const handNumber = isFinished && room.state.game ? room.state.game.handNumber + 1 : 1;
         const nextDealerIndex = (handNumber - 1) % activePlayerIds.length;
         const nextDealerId = activePlayerIds[nextDealerIndex];
         let isPlo = Boolean(room.state.ploRoundDealerId);
@@ -310,11 +326,14 @@ wss.on('connection', (ws) => {
         const yesCount = gamePlayers.filter((p) => room.state.ploVote!.votes[p.id] === 'yes').length;
         const noCount = gamePlayers.filter((p) => room.state.ploVote!.votes[p.id] === 'no').length;
         const voted = yesCount + noCount;
-        if (voted === total && yesCount > total / 2) {
-          const nextHandNumber = room.state.game!.handNumber + 1;
-          const nextDealerIdx = (nextHandNumber - 1) % gamePlayers.length;
-          room.state.ploRoundDealerId = gamePlayers[nextDealerIdx].id;
-          room.state.ploRoundAnchorHasBeenDealer = false;
+        if (voted === total) {
+          room.state.ploVoteConcluded = true;
+          if (yesCount > total / 2) {
+            const nextHandNumber = room.state.game!.handNumber + 1;
+            const nextDealerIdx = (nextHandNumber - 1) % gamePlayers.length;
+            room.state.ploRoundDealerId = gamePlayers[nextDealerIdx].id;
+            room.state.ploRoundAnchorHasBeenDealer = false;
+          }
           room.state.ploVote = undefined;
           room.state.ploVoteInitiator = undefined;
         }
