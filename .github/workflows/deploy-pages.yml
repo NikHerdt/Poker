@@ -35,7 +35,7 @@ jobs:
       - name: Build client
         env:
           VITE_WS_URL: wss://icpoker.onrender.com
-          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_BASE_PATH: /
         run: npm run build
         working-directory: client
 
