@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RoomState, ClientMessage, ServerMessage } from 'shared/types';
 
-const WS_URL =
-  typeof window !== 'undefined'
-    ? (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.hostname + ':3001'
-    : '';
+function getWsUrl(): string {
+  if (typeof window === 'undefined') return '';
+  const envUrl = import.meta.env.VITE_WS_URL as string | undefined;
+  if (envUrl?.trim()) {
+    const u = envUrl.trim();
+    if (u.startsWith('ws://') || u.startsWith('wss://')) return u;
+    return (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + u.replace(/^https?:\/\//, '');
+  }
+  return (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.hostname + ':3001';
+}
+const WS_URL = getWsUrl();
 
 export interface UseGameSocketResult {
   state: RoomState | null;
