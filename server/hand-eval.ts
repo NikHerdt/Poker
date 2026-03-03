@@ -5,4 +5,4 @@ export {
   is72Hand,
   is69Hand,
   formatHandDescription,
-} from '../shared/hand-eval';
+} from './shared/hand-eval';

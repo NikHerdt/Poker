@@ -1,4 +1,4 @@
-import type { Card, GameState, Player, Pot, RoomConfig, LastActionInfo } from '../shared/types';
+import type { Card, GameState, Player, Pot, RoomConfig, LastActionInfo } from './shared/types';
 import {
   RANKS,
   SUITS,
@@ -6,7 +6,7 @@ import {
   DEFAULT_SMALL_BLIND,
   DEFAULT_BIG_BLIND,
   DEFAULT_BUY_IN,
-} from '../shared/constants';
+} from './shared/constants';
 import { evaluateHand, evaluateHandOmaha, compareHandResults } from './hand-eval';
 
 export function createDeck(): Card[] {

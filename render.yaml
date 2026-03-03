@@ -1,16 +1,13 @@
 # Render Blueprint: Poker WebSocket server
 # https://docs.render.com/blueprint-spec
-# Deploy: connect this repo in Render Dashboard, use this blueprint or create a Web Service with these settings.
-#
-# No rootDir: we need the full repo so server/ can import ../shared/. Build/start run from repo root.
-# Build command must be "npm install" only (no "npm run build"); server runs with tsx.
+# Build runs from repo root: copy shared into server, then install. No rootDir so full repo is deployed.
 
 services:
   - type: web
     name: poker-server
     runtime: node
 
-    buildCommand: cd server && npm install
+    buildCommand: cp -r shared server/shared && cd server && npm install
     startCommand: cd server && npm start
 
     # Render sets PORT automatically; server reads process.env.PORT

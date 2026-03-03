@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { WebSocketServer } from 'ws';
-import type { ClientMessage, PlayerAction } from '../shared/types';
+import type { ClientMessage, PlayerAction } from './shared/types';
 import {
   getRoom,
   createRoom,
@@ -13,7 +13,7 @@ import {
   ensureRebuyStateWhenFinished,
   type Room,
 } from './room-manager';
-import { MIN_PLAYERS } from '../shared/constants';
+import { MIN_PLAYERS } from './shared/constants';
 import {
   startHand,
   applyAction,

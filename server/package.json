@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "postinstall": "node scripts/copy-shared.cjs",
     "start": "tsx index.ts",
     "dev": "tsx watch index.ts"
   },

@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Build / deploy
+client/dist/
+server/shared/
+
+# Env / IDE
+.env
+.env.local
+*.log
+.idea/
+.vscode/

@@ -1,4 +1,4 @@
-import type { RoomState, RoomConfig } from '../shared/types';
+import type { RoomState, RoomConfig } from './shared/types';
 import {
   ROOM_CODE_LENGTH,
   MIN_PLAYERS,
@@ -6,7 +6,7 @@ import {
   DEFAULT_SMALL_BLIND,
   DEFAULT_BIG_BLIND,
   DEFAULT_BUY_IN,
-} from '../shared/constants';
+} from './shared/constants';
 
 const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
