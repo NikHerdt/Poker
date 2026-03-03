@@ -1,6 +1,9 @@
 # Render Blueprint: Poker WebSocket server
 # https://docs.render.com/blueprint-spec
 # Deploy: connect this repo in Render Dashboard, use this blueprint or create a Web Service with these settings.
+#
+# Important: Build command must be exactly "npm install" (do not add "npm run build").
+# The server runs with tsx at runtime; tsc would fail because shared/ is outside server/ rootDir.
 
 services:
   - type: web

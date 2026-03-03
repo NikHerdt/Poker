@@ -51,6 +51,7 @@ If you prefer to use the repo’s blueprint:
 
 ## Troubleshooting
 
-- **Build fails:** Ensure **Root Directory** is `server` so `../shared` resolves.
+- **Build fails with "File '.../shared/...' is not under 'rootDir'":** The build command must be exactly **`npm install`**. Do not use `npm run build` or `npm install; npm run build`. The server runs with `tsx` at runtime; TypeScript’s `tsc` expects all sources under `server/`, but the app imports from `../shared/`. In Render: **Settings → Build & Deploy → Build Command** → set to `npm install` and save.
+- **Build fails (other):** Ensure **Root Directory** is `server` so `../shared` resolves when the app runs.
 - **Service unhealthy:** The server exposes `GET /` for health checks; if you changed the port or path, update **Health Check Path** in Render to match.
 - **WebSocket fails:** Use `wss://` (not `ws://`) when the site is served over HTTPS. The host should be your Render URL without a port (e.g. `wss://poker-server-xxxx.onrender.com`).
