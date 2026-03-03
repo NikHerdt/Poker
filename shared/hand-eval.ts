@@ -299,6 +299,6 @@ export function formatHandDescription(r: HandResult): string {
     case 'straight_flush':
       return `Straight flush, ${high} high`;
     default:
-      return r.rank.replace(/_/g, ' ');
+      return String(r.rank).replace(/_/g, ' ');
   }
 }
