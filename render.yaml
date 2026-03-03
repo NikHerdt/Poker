@@ -2,17 +2,16 @@
 # https://docs.render.com/blueprint-spec
 # Deploy: connect this repo in Render Dashboard, use this blueprint or create a Web Service with these settings.
 #
-# Important: Build command must be exactly "npm install" (do not add "npm run build").
-# The server runs with tsx at runtime; tsc would fail because shared/ is outside server/ rootDir.
+# No rootDir: we need the full repo so server/ can import ../shared/. Build/start run from repo root.
+# Build command must be "npm install" only (no "npm run build"); server runs with tsx.
 
 services:
   - type: web
     name: poker-server
     runtime: node
-    rootDir: server
 
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
 
     # Render sets PORT automatically; server reads process.env.PORT
     # Health check: GET / returns 200 (HTTP server runs alongside WebSocket)

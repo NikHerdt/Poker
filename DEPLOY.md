@@ -14,10 +14,10 @@
 3. Render may auto-detect the `render.yaml` blueprint. If it does, confirm the service and click **Create Web Service**.
 4. If it does not use the blueprint, set these by hand:
    - **Name:** `poker-server` (or any name)
-   - **Root Directory:** `server`
+   - **Root Directory:** leave empty (full repo is needed so `server` can import `shared`)
    - **Runtime:** Node
-   - **Build Command:** `npm install`
-   - **Start Command:** `npm start`
+   - **Build Command:** `cd server && npm install`
+   - **Start Command:** `cd server && npm start`
    - **Instance Type:** Free
 
 ### 2. Deploy
@@ -51,7 +51,7 @@ If you prefer to use the repo’s blueprint:
 
 ## Troubleshooting
 
-- **Build fails with "File '.../shared/...' is not under 'rootDir'":** The build command must be exactly **`npm install`**. Do not use `npm run build` or `npm install; npm run build`. The server runs with `tsx` at runtime; TypeScript’s `tsc` expects all sources under `server/`, but the app imports from `../shared/`. In Render: **Settings → Build & Deploy → Build Command** → set to `npm install` and save.
-- **Build fails (other):** Ensure **Root Directory** is `server` so `../shared` resolves when the app runs.
+- **Build fails with "File '.../shared/...' is not under 'rootDir'":** The build command must be exactly **`npm install`**. Do not use `npm run build` or `npm install; npm run build`. The server runs with `tsx` at runtime; TypeScript’s `tsc` expects all sources under `server/`, but the app imports from `../shared/`. In Render: **Settings → Build & Deploy → Build Command** → set to `cd server && npm install` and save.
+- **Runtime error "does not provide an export named 'DEFAULT_BIG_BLIND'" (or shared module not found):** Render only deploys the **Root Directory**. If that is `server`, the `shared/` folder is not in the container. Leave **Root Directory** empty and use **Build Command:** `cd server && npm install` and **Start Command:** `cd server && npm start` so the full repo is deployed.
 - **Service unhealthy:** The server exposes `GET /` for health checks; if you changed the port or path, update **Health Check Path** in Render to match.
 - **WebSocket fails:** Use `wss://` (not `ws://`) when the site is served over HTTPS. The host should be your Render URL without a port (e.g. `wss://poker-server-xxxx.onrender.com`).
