@@ -1,3 +1,4 @@
+import http from 'node:http';
 import { WebSocketServer } from 'ws';
 import type { ClientMessage, PlayerAction } from '../shared/types';
 import {
@@ -23,7 +24,18 @@ import {
 } from './game-engine';
 
 const PORT = Number(process.env.PORT) || 3001;
-const wss = new WebSocketServer({ port: PORT });
+
+const httpServer = http.createServer((req, res) => {
+  if (req.method === 'GET' && req.url === '/' && !req.headers.upgrade) {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Poker server');
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
+
+const wss = new WebSocketServer({ server: httpServer });
 
 const DEFAULT_BIG_BLIND = 10;
 const DEFAULT_SMALL_BLIND = 5;
@@ -401,4 +413,6 @@ wss.on('connection', (ws) => {
   });
 });
 
-console.log(`Poker server listening on port ${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`Poker server listening on port ${PORT}`);
+});

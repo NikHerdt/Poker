@@ -1,0 +1,16 @@
+# Render Blueprint: Poker WebSocket server
+# https://docs.render.com/blueprint-spec
+# Deploy: connect this repo in Render Dashboard, use this blueprint or create a Web Service with these settings.
+
+services:
+  - type: web
+    name: poker-server
+    runtime: node
+    rootDir: server
+
+    buildCommand: npm install
+    startCommand: npm start
+
+    # Render sets PORT automatically; server reads process.env.PORT
+    # Health check: GET / returns 200 (HTTP server runs alongside WebSocket)
+    healthCheckPath: /
