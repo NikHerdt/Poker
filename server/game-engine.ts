@@ -290,6 +290,15 @@ function noPlayerCanAct(state: GameState): boolean {
   return !state.players.some((p) => !p.folded && !p.allIn && p.chips > 0);
 }
 
+/** True when exactly one player can act and that player can check (no bet to call). */
+function onlyOneCanActAndCanCheck(state: GameState): boolean {
+  const actable = state.players.filter((p) => !p.folded && !p.allIn && p.chips > 0);
+  if (actable.length !== 1) return false;
+  const idx = state.players.indexOf(actable[0]);
+  if (state.players[idx].currentBet < state.currentBet) return false;
+  return state.actingPlayerIndex === idx;
+}
+
 function firstPlayerWhoCanAct(state: GameState, fromIndex: number): number {
   let i = fromIndex;
   const start = i;
@@ -404,15 +413,43 @@ export function applyAction(
 }
 
 function advanceStreetsUntilSomeoneCanActOrShowdown(state: GameState, bigBlind: number, smallBlind: number): void {
-  while (state.phase !== 'showdown' && state.phase !== 'finished' && noPlayerCanAct(state)) {
-    if (state.phase === 'preflop') dealFlop(state);
-    else if (state.phase === 'flop') dealTurn(state);
-    else if (state.phase === 'turn') dealRiver(state);
-    else if (state.phase === 'river') {
-      state.phase = 'showdown';
-      runShowdown(state, bigBlind, smallBlind);
-      return;
+  while (state.phase !== 'showdown' && state.phase !== 'finished') {
+    if (noPlayerCanAct(state)) {
+      if (state.phase === 'preflop') dealFlop(state);
+      else if (state.phase === 'flop') dealTurn(state);
+      else if (state.phase === 'turn') dealRiver(state);
+      else if (state.phase === 'river') {
+        state.phase = 'showdown';
+        runShowdown(state, bigBlind, smallBlind);
+        return;
+      }
+      continue;
     }
+    if (onlyOneCanActAndCanCheck(state)) {
+      const idx = state.actingPlayerIndex;
+      state.players[idx].hasActedThisRound = true;
+      state.players[idx].lastAction = 'check';
+      state.lastAction = { playerId: state.players[idx].id, action: 'check' };
+      if (bettingRoundComplete(state)) {
+        state.pots = buildSidePots(state);
+        const activeCount = state.players.filter((p) => !p.folded).length;
+        if (activeCount <= 1) {
+          state.phase = 'showdown';
+          runShowdown(state, bigBlind, smallBlind);
+          return;
+        }
+        if (state.phase === 'preflop') dealFlop(state);
+        else if (state.phase === 'flop') dealTurn(state);
+        else if (state.phase === 'turn') dealRiver(state);
+        else if (state.phase === 'river') {
+          state.phase = 'showdown';
+          runShowdown(state, bigBlind, smallBlind);
+          return;
+        }
+        continue;
+      }
+    }
+    break;
   }
 }
 

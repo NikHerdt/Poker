@@ -10,6 +10,7 @@ import {
   leaveRoom,
   canStartGame,
   ensureRebuyStateWhenFinished,
+  type Room,
 } from './room-manager';
 import { MIN_PLAYERS } from '../shared/constants';
 import {
@@ -23,6 +24,25 @@ import {
 
 const PORT = Number(process.env.PORT) || 3001;
 const wss = new WebSocketServer({ port: PORT });
+
+const DEFAULT_BIG_BLIND = 10;
+const DEFAULT_SMALL_BLIND = 5;
+
+/** If no one can act (e.g. all remaining players all-in), run out the board to showdown. */
+function ensureGameAdvanced(room: Room | null): void {
+  const game = room?.state?.game;
+  if (!game || game.phase === 'showdown' || game.phase === 'finished') return;
+  const bigBlind = room.state.config?.bigBlind ?? DEFAULT_BIG_BLIND;
+  const smallBlind = room.state.config?.smallBlind ?? DEFAULT_SMALL_BLIND;
+  advanceIfBettingRoundComplete(game, bigBlind, smallBlind);
+}
+
+/** Run game advance then set rebuy state when finished so all clients see rebuy popup. */
+function ensureRoomStateBeforeSend(room: Room | null): void {
+  if (!room) return;
+  ensureGameAdvanced(room);
+  if (room.state.game?.phase === 'finished') ensureRebuyStateWhenFinished(room.state.roomCode);
+}
 
 function broadcast(roomCode: string, message: object): void {
   const sockets = getSockets(roomCode);
@@ -71,8 +91,9 @@ wss.on('connection', (ws) => {
         currentRoomCode = roomCode;
         currentPlayerId = playerId;
         addSocket(roomCode, playerId, ws);
-        broadcast(roomCode, { type: 'room_state', state });
-        ws.send(JSON.stringify({ type: 'room_joined', roomCode, playerId, state }));
+        ensureRoomStateBeforeSend(room);
+        broadcast(roomCode, { type: 'room_state', state: room.state });
+        ws.send(JSON.stringify({ type: 'room_joined', roomCode, playerId, state: room.state }));
         return;
       }
 
@@ -142,7 +163,7 @@ wss.on('connection', (ws) => {
           }
           for (const id of spectatorRebuy) {
             previousChips[id] = buyIn;
-            previousBuyInCounts[id] = (buyInCounts[id] ?? 1) + 1;
+            previousBuyInCounts[id] = (buyInCounts[id] ?? 0) + 1;
           }
 
           for (const id of newJoiners) {
@@ -205,6 +226,7 @@ wss.on('connection', (ws) => {
         for (const p of game.players) {
           room.state.playerIdToBuyInCount[p.id] = p.buyInCount ?? 1;
         }
+        ensureRoomStateBeforeSend(room);
         broadcast(currentRoomCode, { type: 'game_started', state: room.state });
         return;
       }
@@ -233,6 +255,7 @@ wss.on('connection', (ws) => {
           return;
         }
         ensureRebuyStateWhenFinished(currentRoomCode);
+        ensureRoomStateBeforeSend(room);
         broadcast(currentRoomCode, { type: 'room_state', state: room.state });
         return;
       }
@@ -262,6 +285,7 @@ wss.on('connection', (ws) => {
           room.state.fieldGoalUsed[currentPlayerId] = true;
         }
         ensureRebuyStateWhenFinished(currentRoomCode);
+        ensureRoomStateBeforeSend(room);
         broadcast(currentRoomCode, { type: 'room_state', state: room.state });
         return;
       }
@@ -272,6 +296,7 @@ wss.on('connection', (ws) => {
         if (!room?.state.game || room.state.game.phase !== 'finished') return;
         if (room.state.rebuyDecisions?.[currentPlayerId] === 'pending') {
           room.state.rebuyDecisions[currentPlayerId] = 'yes';
+          ensureRoomStateBeforeSend(room);
           broadcast(currentRoomCode, { type: 'room_state', state: room.state });
         }
         return;
@@ -283,6 +308,7 @@ wss.on('connection', (ws) => {
         if (!room?.state.game || room.state.game.phase !== 'finished') return;
         if (room.state.rebuyDecisions?.[currentPlayerId] === 'pending') {
           room.state.rebuyDecisions[currentPlayerId] = 'no';
+          ensureRoomStateBeforeSend(room);
           broadcast(currentRoomCode, { type: 'room_state', state: room.state });
         }
         return;
@@ -296,6 +322,7 @@ wss.on('connection', (ws) => {
         if (!inGame) {
           if (!room.state.rebuyRequested) room.state.rebuyRequested = {};
           room.state.rebuyRequested[currentPlayerId] = true;
+          ensureRoomStateBeforeSend(room);
           broadcast(currentRoomCode, { type: 'room_state', state: room.state });
         }
         return;
@@ -311,6 +338,7 @@ wss.on('connection', (ws) => {
         if (room.state.ploVote) return;
         room.state.ploVote = { votes: {} };
         room.state.ploVoteInitiator = currentPlayerId;
+        ensureRoomStateBeforeSend(room);
         broadcast(currentRoomCode, { type: 'room_state', state: room.state });
         return;
       }
@@ -337,15 +365,20 @@ wss.on('connection', (ws) => {
           room.state.ploVote = undefined;
           room.state.ploVoteInitiator = undefined;
         }
+        ensureRoomStateBeforeSend(room);
         broadcast(currentRoomCode, { type: 'room_state', state: room.state });
         return;
       }
 
       if (msg.type === 'leave_room') {
         if (currentRoomCode && currentPlayerId) {
-          const state = leaveRoom(currentRoomCode, currentPlayerId);
+          leaveRoom(currentRoomCode, currentPlayerId);
           removeSocket(currentRoomCode, currentPlayerId);
-          if (state) broadcast(currentRoomCode, { type: 'room_state', state });
+          const room = getRoom(currentRoomCode);
+          if (room) {
+            ensureRoomStateBeforeSend(room);
+            broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+          }
           currentRoomCode = null;
           currentPlayerId = null;
         }
@@ -360,7 +393,10 @@ wss.on('connection', (ws) => {
     if (currentRoomCode && currentPlayerId) {
       removeSocket(currentRoomCode, currentPlayerId);
       const room = getRoom(currentRoomCode);
-      if (room) broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+      if (room) {
+        ensureRoomStateBeforeSend(room);
+        broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+      }
     }
   });
 });
