@@ -7,6 +7,8 @@ import { MAX_PLO_PLAYERS } from 'shared/constants';
 import { CardImage } from './CardImage';
 import { PlayerSeat, SeatBet, type SeatPosition } from './PlayerSeat';
 import { MyHand } from './MyHand';
+import { ChipFlights, useChipFlights } from './ChipFlight';
+import { useCountUp } from '../hooks/useCountUp';
 import { BetControls } from './BetControls';
 import { BlindLevelBadge } from './BlindLevelBadge';
 import { TestScenarioPicker } from './TestScenarioPicker';
@@ -92,6 +94,24 @@ export function Table({ state, playerId, socket }: TableProps) {
     return players.map((_: Player, i: number) => players[(start + i) % players.length]);
   }, [game.players, playerId]);
   const positions = useMemo(() => seatPositions(seats.length), [seats.length]);
+  const betPositions = useMemo(() => positions.map(betPosition), [positions]);
+
+  const chipFlights = useChipFlights(game, seats, betPositions);
+  const potDisplay = useCountUp(totalPot);
+
+  // Cards that have just landed sail in. Held in state, not derived during
+  // render, so an unrelated re-render cannot cut the animation short.
+  const [dealtFrom, setDealtFrom] = useState<number | null>(null);
+  const previousCardCount = useRef(0);
+  useEffect(() => {
+    const count = game.communityCards.length;
+    const previous = previousCardCount.current;
+    previousCardCount.current = count;
+    if (count <= previous) return;
+    setDealtFrom(previous);
+    const t = setTimeout(() => setDealtFrom(null), 800);
+    return () => clearTimeout(t);
+  }, [game.communityCards.length]);
 
   const canFieldGoal =
     !!me &&
@@ -191,11 +211,16 @@ export function Table({ state, playerId, socket }: TableProps) {
         <div className="table-center">
           <div className="pot">
             <span className="pot-label">Pot</span>
-            <span className="pot-amount">{totalPot}</span>
+            <span className="pot-amount">{potDisplay}</span>
           </div>
           <div className="community-cards">
             {game.communityCards.map((c: Card, i: number) => (
-              <CardImage key={i} card={c} size="community" />
+              <CardImage
+                key={`${game.handNumber}-${i}`}
+                card={c}
+                size="community"
+                dealDelayMs={dealtFrom != null && i >= dealtFrom ? (i - dealtFrom) * 90 : undefined}
+              />
             ))}
           </div>
           {handOver && game.winnerIds?.length ? (
@@ -229,9 +254,11 @@ export function Table({ state, playerId, socket }: TableProps) {
         {!handOver &&
           seats.map((p: Player, i: number) =>
             p.currentBet > 0 ? (
-              <SeatBet key={`bet-${p.id}`} amount={p.currentBet} position={betPosition(positions[i])} />
+              <SeatBet key={`bet-${p.id}`} amount={p.currentBet} position={betPositions[i]} />
             ) : null
           )}
+
+        <ChipFlights flights={chipFlights} />
       </div>
 
       {showFieldGoalMinigame && <FieldGoalMinigame onComplete={handleFieldGoalComplete} />}

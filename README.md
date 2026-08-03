@@ -85,6 +85,12 @@ Your own hand is shown next to the action buttons at full size, with the ranks
 spelled out beside it, so the seats can stay small enough for a full table
 without your cards becoming hard to read.
 
+Board cards sail in and are dealt face down then flipped, bets slide out from
+the player who made them, chips are raked into the middle when a betting round
+closes and pushed out to the winner at the end, the pot counts up rather than
+jumping, and the seat on the clock pulses. All of it honours
+`prefers-reduced-motion`.
+
 **Table size** runs from 2 to 12 players. Past 8 the seats, cards and badges
 shrink and the ring widens so a full table still fits a phone screen without
 scrolling. Pot Limit Omaha deals four cards each, which does not fit in a deck

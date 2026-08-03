@@ -150,12 +150,55 @@
   min-height: 1px;
 }
 
-.card-image {
-  display: block;
-  height: auto;
+/* Cards keep both faces so turning one over is a flip, not a swap. */
+.card {
+  position: relative;
+  flex: 0 0 auto;
+  aspect-ratio: 226 / 314;
+  perspective: 700px;
+  user-select: none;
+}
+
+.card-inner {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.card-inner.is-face-up {
+  transform: rotateY(180deg);
+}
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   border-radius: 5px;
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.4);
-  user-select: none;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.card-front {
+  transform: rotateY(180deg);
+}
+
+/* A freshly dealt card sails in from the middle of the table. */
+.card.is-dealing {
+  animation: card-deal 0.42s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+}
+
+@keyframes card-deal {
+  from {
+    transform: translate(-60%, -40%) rotate(-14deg) scale(0.85);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
 }
 
 .card-community {
@@ -422,9 +465,121 @@
   }
 }
 
+/* Chips travelling between a seat and the middle of the table. */
+.chip-flight {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.45rem 0.1rem 0.25rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+  font-size: clamp(0.6rem, 1.9vw, 0.8rem);
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 3;
+  animation: chip-travel 0.52s cubic-bezier(0.4, 0, 0.3, 1) forwards;
+}
+
+.chip-flight.to-winner {
+  background: rgba(201, 184, 122, 0.9);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #23180a;
+  animation-duration: 0.62s;
+}
+
+.chip-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #d9584f, #96322c);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.chip-flight.to-winner .chip-dot {
+  background: linear-gradient(145deg, #f6e9b8, #c9a94e);
+}
+
+@keyframes chip-travel {
+  from {
+    left: var(--from-left);
+    top: var(--from-top);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  to {
+    left: var(--to-left);
+    top: var(--to-top);
+    opacity: 0;
+  }
+}
+
+/* The seat on the clock breathes so it is obvious across a crowded table. */
+.seat.is-acting {
+  animation: seat-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes seat-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(35, 143, 97, 0.25), 0 0 18px rgba(35, 143, 97, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(35, 143, 97, 0.35), 0 0 26px rgba(35, 143, 97, 0.55);
+  }
+}
+
+.seat-winner-tag {
+  animation: winner-pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
+}
+
+@keyframes winner-pop {
+  from {
+    transform: translateX(-50%) scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+}
+
+.seat.is-winner {
+  animation: winner-glow 1.4s ease-in-out 2;
+}
+
+@keyframes winner-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(201, 184, 122, 0.3), 0 0 22px rgba(201, 184, 122, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(201, 184, 122, 0.45), 0 0 34px rgba(201, 184, 122, 0.7);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .seat-bet {
+  .seat-bet,
+  .chip-flight,
+  .card.is-dealing,
+  .seat.is-acting,
+  .seat.is-winner,
+  .seat-winner-tag {
     animation: none;
+  }
+
+  .card-inner {
+    transition: none;
+  }
+
+  .chip-flight {
+    display: none;
   }
 }
 
@@ -505,13 +660,16 @@
   display: flex;
 }
 
-.my-hand-cards .card-image {
+.my-hand-cards .card {
   width: clamp(46px, 13vw, 68px);
   margin-right: -10px;
+}
+
+.my-hand-cards .card .card-face {
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
 }
 
-.my-hand-cards .card-image:last-child {
+.my-hand-cards .card:last-child {
   margin-right: 0;
 }
 

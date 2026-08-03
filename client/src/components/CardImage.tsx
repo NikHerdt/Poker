@@ -20,21 +20,32 @@ interface CardImageProps {
   card?: Card;
   faceDown?: boolean;
   size?: 'community' | 'hand' | 'mine';
+  /** Set on a freshly dealt card to make it sail in; stagger with the delay. */
+  dealDelayMs?: number;
 }
 
 /**
- * Card sizes are set in CSS (see Table.css) rather than in pixels here, so the
- * whole table can shrink to fit a phone screen without scrolling.
+ * Both faces are always rendered, back to back, so turning a card face up is a
+ * real flip rather than a swap. Sizes come from CSS (see Table.css) so the
+ * whole table can shrink to fit a phone.
  */
-export function CardImage({ card, faceDown = false, size = 'hand' }: CardImageProps) {
-  const hidden = faceDown || !card;
-  const src = hidden ? CARD_BACK_URL : cardImageUrl(card);
+export function CardImage({ card, faceDown = false, size = 'hand', dealDelayMs }: CardImageProps) {
+  const faceUp = !faceDown && !!card;
+  const label = faceUp ? `${card!.rank} of ${card!.suit}` : 'Face-down card';
+
   return (
-    <img
-      src={src}
-      alt={hidden ? 'Face-down card' : `${card!.rank} of ${card!.suit}`}
-      className={`card-image card-${size}`}
-      draggable={false}
-    />
+    <div
+      className={`card card-${size}${dealDelayMs != null ? ' is-dealing' : ''}`}
+      style={dealDelayMs != null ? { animationDelay: `${dealDelayMs}ms` } : undefined}
+      role="img"
+      aria-label={label}
+    >
+      <div className={`card-inner${faceUp ? ' is-face-up' : ''}`}>
+        <img className="card-face card-back" src={CARD_BACK_URL} alt="" draggable={false} />
+        {card && (
+          <img className="card-face card-front" src={cardImageUrl(card)} alt="" draggable={false} />
+        )}
+      </div>
+    </div>
   );
 }
