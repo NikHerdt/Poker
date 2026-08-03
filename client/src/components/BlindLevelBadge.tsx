@@ -20,7 +20,7 @@ export function BlindLevelBadge({ state, game }: { state: RoomState; game: GameS
   const clockBase = useRef({ serverNowMs: Date.now(), localNowMs: Date.now() });
   const [, forceTick] = useState(0);
 
-  const serverNowMs = tournament?.serverNowMs;
+  const serverNowMs = state.serverNowMs;
   useEffect(() => {
     if (serverNowMs != null) clockBase.current = { serverNowMs, localNowMs: Date.now() };
   }, [serverNowMs]);

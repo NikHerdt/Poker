@@ -15,11 +15,12 @@ interface PlayerSeatProps {
   name: string;
   isYou: boolean;
   isActing: boolean;
+  /** Seconds left on this player's clock, when it is their turn. */
+  secondsLeft: number | null;
   isWinner: boolean;
   isDealer: boolean;
   /** Their cards are face up: it is you, or they chose to show. */
   revealed: boolean;
-  handDescription: string | null;
   position: SeatPosition;
 }
 
@@ -28,10 +29,10 @@ export function PlayerSeat({
   name,
   isYou,
   isActing,
+  secondsLeft,
   isWinner,
   isDealer,
   revealed,
-  handDescription,
   position,
 }: PlayerSeatProps) {
   const cardCount = player.holeCards.length || player.holeCardCount || 2;
@@ -62,32 +63,36 @@ export function PlayerSeat({
           {name}
           {isYou && <span className="seat-you">you</span>}
         </div>
-        <div className="seat-chips">{player.chips}</div>
-        {(isDealer || player.isSmallBlind || player.isBigBlind) && (
-          <div className="seat-markers">
-            {isDealer && (
-              <span className="marker dealer" title="Dealer button">
-                D
-              </span>
-            )}
-            {player.isSmallBlind && (
-              <span className="marker sb" title="Small blind">
-                SB
-              </span>
-            )}
-            {player.isBigBlind && (
-              <span className="marker bb" title="Big blind">
-                BB
-              </span>
-            )}
-          </div>
-        )}
-        {player.lastActionLabel && !player.folded && (
-          <div className={`seat-action action-${player.lastActionLabel}`}>{player.lastActionLabel}</div>
-        )}
-        {player.folded && <div className="seat-action action-fold">folded</div>}
+        {/* Chips, blind markers and last action share one line to keep seats
+            short enough that a full ring of them does not collide. */}
+        <div className="seat-meta">
+          <span className="seat-chips">{player.chips}</span>
+          {isDealer && (
+            <span className="marker dealer" title="Dealer button">
+              D
+            </span>
+          )}
+          {player.isSmallBlind && (
+            <span className="marker sb" title="Small blind">
+              SB
+            </span>
+          )}
+          {player.isBigBlind && (
+            <span className="marker bb" title="Big blind">
+              BB
+            </span>
+          )}
+          {player.folded ? (
+            <span className="seat-action action-fold">folded</span>
+          ) : isActing && secondsLeft != null ? (
+            <span className={`seat-clock ${secondsLeft <= 10 ? 'urgent' : ''}`}>{secondsLeft}s</span>
+          ) : (
+            player.lastActionLabel && (
+              <span className={`seat-action action-${player.lastActionLabel}`}>{player.lastActionLabel}</span>
+            )
+          )}
+        </div>
       </div>
-      {handDescription && !player.folded && <div className="seat-hand">{handDescription}</div>}
     </div>
   );
 }

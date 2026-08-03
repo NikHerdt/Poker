@@ -15,7 +15,22 @@ export const HAND_RANK_ORDER = [
 
 export const ROOM_CODE_LENGTH = 6;
 export const MIN_PLAYERS = 2;
-export const MAX_PLAYERS = 9;
+export const MAX_PLAYERS = 12;
+
+/**
+ * A hand needs `cardsPerPlayer * n` hole cards plus 8 for the three burns and
+ * the five board cards, and there are only 52 in the deck. That caps Hold'em at
+ * 22 players and Pot Limit Omaha, which deals four each, at 11.
+ */
+export const BOARD_AND_BURN_CARDS = 8;
+export const MAX_PLO_PLAYERS = Math.floor((52 - BOARD_AND_BURN_CARDS) / 4);
+/**
+ * How long a player has to act before the table acts for them: check if there
+ * is nothing to call, otherwise fold. Enforced by the server, so a closed tab
+ * or a slow phone cannot hold the table up.
+ */
+export const TURN_TIME_LIMIT_MS = 60_000;
+
 export const DEFAULT_SMALL_BLIND = 5;
 export const DEFAULT_BIG_BLIND = 10;
 export const DEFAULT_BUY_IN = 200;

@@ -16,7 +16,7 @@ import {
   seatPlayer,
   type Room,
 } from './room-manager';
-import { MIN_PLAYERS } from './shared/constants';
+import { MIN_PLAYERS, MAX_PLO_PLAYERS, TURN_TIME_LIMIT_MS } from './shared/constants';
 import { tournamentStateForHand } from './shared/blinds';
 import { getTestScenario } from './shared/test-scenarios';
 import {
@@ -27,6 +27,7 @@ import {
   reverseLastRaise,
   advanceIfBettingRoundComplete,
   removePlayerFromHand,
+  applyTurnTimeout,
 } from './game-engine';
 
 const PORT = Number(process.env.PORT) || 3001;
@@ -50,12 +51,51 @@ function ensureGameAdvanced(room: Room | null): void {
   advanceIfBettingRoundComplete(game);
 }
 
+/**
+ * Arm (or clear) the countdown that acts for whoever is on the clock. The
+ * deadline only restarts when the turn actually moves to someone else, so a
+ * broadcast for an unrelated reason does not hand a player extra time.
+ */
+function updateTurnTimer(room: Room): void {
+  const game = room.state.game;
+  const acting =
+    game && game.phase !== 'finished' && game.phase !== 'showdown'
+      ? game.players[game.actingPlayerIndex]
+      : undefined;
+  const actingId = acting && !acting.folded && !acting.allIn ? acting.id : undefined;
+
+  if (room.turnPlayerId === actingId) return;
+
+  if (room.turnTimer) clearTimeout(room.turnTimer);
+  room.turnTimer = undefined;
+  room.turnPlayerId = actingId;
+
+  if (!actingId || !game) {
+    if (game) delete game.actingDeadlineMs;
+    return;
+  }
+
+  game.actingDeadlineMs = Date.now() + TURN_TIME_LIMIT_MS;
+  const roomCode = room.state.roomCode;
+  room.turnTimer = setTimeout(() => {
+    const current = getRoom(roomCode);
+    if (!current?.state.game) return;
+    const action = applyTurnTimeout(current.state.game, actingId);
+    if (!action) return;
+    ensureRoomStateBeforeSend(current);
+    broadcast(roomCode, { type: 'room_state', state: current.state });
+  }, TURN_TIME_LIMIT_MS);
+  // Do not hold the process open just for a countdown.
+  room.turnTimer.unref?.();
+}
+
 /** Run game advance then set rebuy state when finished so all clients see rebuy popup. */
 function ensureRoomStateBeforeSend(room: Room | null): void {
   if (!room) return;
   ensureGameAdvanced(room);
   if (room.state.game?.phase === 'finished') ensureRebuyStateWhenFinished(room.state.roomCode);
-  if (room.state.tournament) room.state.tournament.serverNowMs = Date.now();
+  updateTurnTimer(room);
+  room.state.serverNowMs = Date.now();
 }
 
 /**
@@ -246,11 +286,8 @@ wss.on('connection', (ws) => {
           room.state.rebuyRequested = undefined;
         }
 
-        if (isFinished && room.state.hostId !== currentPlayerId) {
-          ws.send(JSON.stringify({ type: 'error', error: 'Only host can start next hand' }));
-          return;
-        }
-
+        // Only the host opens the game, but once it is running anyone at the
+        // table can deal the next hand — no waiting on one person.
         if (isFinished) {
           room.state.ploVote = undefined;
           room.state.ploVoteInitiator = undefined;
@@ -259,6 +296,12 @@ wss.on('connection', (ws) => {
 
         const dealerId = nextDealerId(room.state, activePlayerIds);
         const dealerIndex = Math.max(0, activePlayerIds.indexOf(dealerId));
+        // Four hole cards each does not fit in a deck at a big table, so a PLO
+        // round quietly reverts to Hold'em rather than dealing an invalid hand.
+        if (room.state.ploRoundDealerId && activePlayerIds.length > MAX_PLO_PLAYERS) {
+          delete room.state.ploRoundDealerId;
+          delete room.state.ploRoundAnchorHasBeenDealer;
+        }
         let isPlo = Boolean(room.state.ploRoundDealerId);
         if (room.state.ploRoundDealerId && dealerId === room.state.ploRoundDealerId) {
           if (room.state.ploRoundAnchorHasBeenDealer) {
@@ -416,6 +459,15 @@ wss.on('connection', (ws) => {
           return;
         }
         if (room.state.ploVote) return;
+        if (room.state.game.players.length > MAX_PLO_PLAYERS) {
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              error: `Pot Limit Omaha needs four cards each, so it only works with up to ${MAX_PLO_PLAYERS} players`,
+            })
+          );
+          return;
+        }
         room.state.ploVote = { votes: {} };
         room.state.ploVoteInitiator = currentPlayerId;
         ensureRoomStateBeforeSend(room);

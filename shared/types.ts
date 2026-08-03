@@ -107,8 +107,6 @@ export interface TournamentState {
   nextLevelAtHand?: number;
   /** Epoch ms when the next level starts ('time' mode). */
   nextLevelAtMs?: number;
-  /** Server clock at broadcast time, so clients can render an unskewed countdown. */
-  serverNowMs?: number;
   /** True once maxLevel has been reached and blinds no longer increase. */
   atMaxLevel?: boolean;
 }
@@ -146,6 +144,12 @@ export interface GameState {
   testScenario?: string;
   /** Players who chose to show their hand after it ended. Nothing is shown automatically. */
   revealedPlayerIds?: string[];
+  /**
+   * Server clock time by which the acting player must act. Past this the server
+   * checks or folds for them. Compare against `RoomState.serverNowMs`, not the
+   * browser clock.
+   */
+  actingDeadlineMs?: number;
 }
 
 export type JoinRequestStatus = 'pending' | 'denied';
@@ -185,6 +189,8 @@ export interface RoomState {
   ploVoteConcluded?: boolean;
   /** Blind level tracking; present once the first hand has been dealt. */
   tournament?: TournamentState;
+  /** Server clock when this state was sent, so countdowns survive clock skew. */
+  serverNowMs?: number;
   /** Test mode only: scenario the host queued for the next hand. */
   pendingTestScenario?: string;
 }

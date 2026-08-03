@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RoomState, Card, Player } from 'shared/types';
 import type { UseGameSocketResult } from '../hooks/useGameSocket';
 import { evaluateHand, evaluateHandOmaha, formatHandDescription } from 'shared/hand-eval';
 import { getTestScenario } from 'shared/test-scenarios';
+import { MAX_PLO_PLAYERS } from 'shared/constants';
 import { CardImage } from './CardImage';
 import { PlayerSeat, SeatBet, type SeatPosition } from './PlayerSeat';
+import { MyHand } from './MyHand';
 import { BetControls } from './BetControls';
 import { BlindLevelBadge } from './BlindLevelBadge';
 import { TestScenarioPicker } from './TestScenarioPicker';
@@ -12,24 +14,28 @@ import { FieldGoalMinigame } from './FieldGoalMinigame';
 import './Table.css';
 import './FieldGoalMinigame.css';
 
-const TURN_TIMER_SECONDS = 60;
-
 interface TableProps {
   state: RoomState;
   playerId: string;
   socket: UseGameSocketResult;
 }
 
+/** Past this many seats the ring gets crowded, so seats and cards shrink. */
+const TIGHT_SEAT_COUNT = 8;
+
 /**
  * Seats laid out around an oval, with you at the bottom and everyone else
  * running clockwise from there, so the table reads the same for every player.
+ * A full table pushes the ring out slightly to buy room between neighbours.
  */
 function seatPositions(count: number): SeatPosition[] {
+  const radiusX = count > TIGHT_SEAT_COUNT ? 41 : 39;
+  const radiusY = count > TIGHT_SEAT_COUNT ? 44 : 40;
   return Array.from({ length: count }, (_, i) => {
-    const angle = (Math.PI / 2) + (i * 2 * Math.PI) / count;
+    const angle = Math.PI / 2 + (i * 2 * Math.PI) / count;
     const outX = Math.cos(angle);
     const outY = Math.sin(angle);
-    return { left: 50 + outX * 39, top: 50 + outY * 40, outX, outY };
+    return { left: 50 + outX * radiusX, top: 50 + outY * radiusY, outX, outY };
   });
 }
 
@@ -55,18 +61,28 @@ export function Table({ state, playerId, socket }: TableProps) {
   const revealed = new Set(game.revealedPlayerIds ?? []);
   const winners = new Set(game.winnerIds ?? []);
 
-  const [turnSecondsLeft, setTurnSecondsLeft] = useState<number | null>(null);
+  // The countdown belongs to the server: it is the one that will check or fold
+  // for you when it runs out, so the display is anchored to its deadline.
+  const deadline = game.actingDeadlineMs;
+  const clockBase = useRef({ serverNowMs: Date.now(), localNowMs: Date.now() });
+  const serverNowMs = state.serverNowMs;
   useEffect(() => {
-    if (!isMyTurn) {
-      setTurnSecondsLeft(null);
-      return;
-    }
-    setTurnSecondsLeft(TURN_TIMER_SECONDS);
-    const t = setInterval(() => {
-      setTurnSecondsLeft((s) => (s == null || s <= 1 ? null : s - 1));
-    }, 1000);
+    if (serverNowMs != null) clockBase.current = { serverNowMs, localNowMs: Date.now() };
+  }, [serverNowMs]);
+
+  const secondsLeft = useCallback(() => {
+    if (deadline == null) return null;
+    const estimatedNow = clockBase.current.serverNowMs + (Date.now() - clockBase.current.localNowMs);
+    return Math.max(0, Math.ceil((deadline - estimatedNow) / 1000));
+  }, [deadline]);
+
+  const [turnSecondsLeft, setTurnSecondsLeft] = useState<number | null>(secondsLeft);
+  useEffect(() => {
+    setTurnSecondsLeft(secondsLeft());
+    if (deadline == null) return;
+    const t = setInterval(() => setTurnSecondsLeft(secondsLeft()), 500);
     return () => clearInterval(t);
-  }, [isMyTurn, game.actingPlayerIndex, game.phase]);
+  }, [deadline, secondsLeft]);
 
   // Rotate the table so you are always the bottom seat.
   const seats = useMemo(() => {
@@ -169,7 +185,7 @@ export function Table({ state, playerId, socket }: TableProps) {
         </div>
       )}
 
-      <div className="table-area">
+      <div className="table-area" data-density={seats.length > TIGHT_SEAT_COUNT ? 'tight' : 'roomy'}>
         <div className="table-felt" />
 
         <div className="table-center">
@@ -199,10 +215,12 @@ export function Table({ state, playerId, socket }: TableProps) {
             name={state.playerIdToName[p.id] ?? p.name}
             isYou={p.id === playerId}
             isActing={game.players[game.actingPlayerIndex]?.id === p.id && !handOver}
+            secondsLeft={
+              game.players[game.actingPlayerIndex]?.id === p.id && !handOver ? turnSecondsLeft : null
+            }
             isWinner={handOver && winners.has(p.id)}
             isDealer={p.isDealer}
             revealed={p.id === playerId || revealed.has(p.id)}
-            handDescription={p.id === playerId ? myHandDescription : null}
             position={positions[i]}
           />
         ))}
@@ -219,24 +237,31 @@ export function Table({ state, playerId, socket }: TableProps) {
       {showFieldGoalMinigame && <FieldGoalMinigame onComplete={handleFieldGoalComplete} />}
 
       <div className="table-actions">
-        {me && !me.folded && !handOver && game.phase !== 'showdown' && (
+        {me && !handOver && game.phase !== 'showdown' && (
           <>
             <div className="action-meta">
-              {isMyTurn && turnSecondsLeft != null && (
-                <span className="timer">Your turn · {turnSecondsLeft}s</span>
-              )}
-              {!isMyTurn && <span className="waiting">Waiting for other players…</span>}
-              <button
-                type="button"
-                className={`btn fieldgoal ${!canFieldGoal ? 'is-disabled' : ''}`}
-                onClick={() => canFieldGoal && setShowFieldGoalMinigame(true)}
-                disabled={!canFieldGoal}
-                title={fieldGoalReason}
-              >
-                Field Goal
-              </button>
+              <MyHand cards={me.holeCards} description={myHandDescription} folded={me.folded} />
+              <div className="action-status">
+                {isMyTurn && turnSecondsLeft != null && (
+                  <span className={`timer ${turnSecondsLeft <= 10 ? 'urgent' : ''}`}>
+                    Your turn · {turnSecondsLeft}s
+                  </span>
+                )}
+                {!isMyTurn && !me.folded && <span className="waiting">Waiting…</span>}
+                {!me.folded && (
+                  <button
+                    type="button"
+                    className={`btn fieldgoal ${!canFieldGoal ? 'is-disabled' : ''}`}
+                    onClick={() => canFieldGoal && setShowFieldGoalMinigame(true)}
+                    disabled={!canFieldGoal}
+                    title={fieldGoalReason}
+                  >
+                    Field Goal
+                  </button>
+                )}
+              </div>
             </div>
-            {isMyTurn && (
+            {isMyTurn && !me.folded && (
               <BetControls game={game} me={me} totalPot={totalPot} onAction={socket.sendAction} />
             )}
           </>
@@ -308,29 +333,31 @@ function ResultPanel({
               Show my cards
             </button>
           ))}
-        {isHost ? (
-          <button
-            type="button"
-            className="btn next-hand"
-            onClick={socket.startGame}
-            disabled={!allDecided || activeCount < 2}
-            title={
-              !allDecided
-                ? 'Waiting for rebuy decisions'
-                : activeCount < 2
-                  ? 'Need at least 2 players to start'
-                  : undefined
-            }
-          >
-            Next hand
-          </button>
-        ) : (
-          allDecided && <span className="waiting-host">Waiting for the host to deal.</span>
-        )}
-        {!state.ploVoteConcluded && !state.ploVote && (
+        {/* Anyone at the table can deal the next hand. */}
+        <button
+          type="button"
+          className="btn next-hand"
+          onClick={socket.startGame}
+          disabled={!allDecided || activeCount < 2}
+          title={
+            !allDecided
+              ? 'Waiting for rebuy decisions'
+              : activeCount < 2
+                ? 'Need at least 2 players to start'
+                : 'Deal the next hand'
+          }
+        >
+          Next hand
+        </button>
+        {!state.ploVoteConcluded && !state.ploVote && game.players.length <= MAX_PLO_PLAYERS && (
           <button type="button" className="btn plo-vote" onClick={socket.sendPloVoteStart}>
             PLO vote
           </button>
+        )}
+        {!state.ploVoteConcluded && !state.ploVote && game.players.length > MAX_PLO_PLAYERS && (
+          <span className="plo-unavailable">
+            PLO needs four cards each, so it is off above {MAX_PLO_PLAYERS} players
+          </span>
         )}
       </div>
 

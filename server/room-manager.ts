@@ -23,6 +23,10 @@ export interface Room {
   state: RoomState;
   playerIds: Set<string>;
   sockets: Map<string, import('ws').WebSocket>;
+  /** Countdown that acts for the player whose turn it is if they run out of time. */
+  turnTimer?: NodeJS.Timeout;
+  /** Player the current turnTimer belongs to. */
+  turnPlayerId?: string;
 }
 
 const rooms = new Map<string, Room>();

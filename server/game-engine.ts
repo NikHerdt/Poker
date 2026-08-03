@@ -3,6 +3,8 @@ import {
   RANKS,
   SUITS,
   MIN_PLAYERS,
+  MAX_PLO_PLAYERS,
+  BOARD_AND_BURN_CARDS,
   DEFAULT_SMALL_BLIND,
   DEFAULT_BIG_BLIND,
   DEFAULT_BUY_IN,
@@ -148,6 +150,13 @@ export function startHand(options: StartHandOptions): GameState {
   }
 
   const holeCardCount = isPlo ? 4 : 2;
+  const cardsNeeded = holeCardCount * playerIds.length + BOARD_AND_BURN_CARDS;
+  if (cardsNeeded > 52) {
+    throw new Error(
+      `${playerIds.length} players need ${cardsNeeded} cards, more than a deck holds` +
+        (isPlo ? ` — Pot Limit Omaha tops out at ${MAX_PLO_PLAYERS} players` : '')
+    );
+  }
   let deck = shuffle(createDeck());
   if (rig) deck = stackDeck(deck, planFromRig(rig, playerIds.length, holeCardCount));
   const dealerIndex =
@@ -489,6 +498,24 @@ function foldPlayer(state: GameState, player: Player): boolean {
   );
   state.phase = 'finished';
   return true;
+}
+
+/**
+ * The acting player ran out of time. Take the least damaging action for them:
+ * check when it costs nothing, otherwise fold. Returns what was done, or null
+ * if they are no longer the player to act.
+ */
+export function applyTurnTimeout(state: GameState, playerId: string): 'check' | 'fold' | null {
+  if (state.phase === 'finished' || state.phase === 'showdown') return null;
+  const idx = state.players.findIndex((p) => p.id === playerId);
+  if (idx < 0 || idx !== state.actingPlayerIndex) return null;
+
+  const player = state.players[idx];
+  if (player.folded || player.allIn) return null;
+
+  const action = player.currentBet >= state.currentBet ? 'check' : 'fold';
+  applyAction(state, playerId, { type: action });
+  return action;
 }
 
 /**

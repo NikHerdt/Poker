@@ -81,6 +81,16 @@ front of them and slide in as they bet; the pot in the middle is everything
 committed to the hand. The seat shows the player's last action — check, call,
 **bet**, **raise** or all-in — and the winner gets a badge when the hand ends.
 
+Your own hand is shown next to the action buttons at full size, with the ranks
+spelled out beside it, so the seats can stay small enough for a full table
+without your cards becoming hard to read.
+
+**Table size** runs from 2 to 12 players. Past 8 the seats, cards and badges
+shrink and the ring widens so a full table still fits a phone screen without
+scrolling. Pot Limit Omaha deals four cards each, which does not fit in a deck
+beyond 11 players, so the PLO vote is unavailable above that and a PLO round
+reverts to Hold'em if the table grows.
+
 **Betting** follows normal table rules. With no bet in front of you the choice
 is check or **bet** (minimum one big blind); facing a bet it is call or
 **raise** (minimum: the size of the last bet or raise, on top of it). Both
@@ -91,6 +101,16 @@ shortcuts.
 **Showing cards** is opt-in. Hole cards are never sent to other players'
 browsers — not just hidden in the UI — so the only way anyone sees your hand is
 if you press *Show my cards* after the hand.
+
+**The clock.** Whoever is on the clock has 60 seconds, counted down in their
+seat so the whole table can see it. Run out and the server acts for you: it
+checks if that costs nothing, and folds otherwise. The countdown is the
+server's, so closing a tab or losing signal cannot stall the table.
+
+**Dealing.** The host opens the game, but once it is running *Next hand* is
+available to everyone — no waiting on one person between hands. It stays
+disabled until any busted players have answered their rebuy prompt and at least
+two players are in.
 
 ## Seats, joining and leaving
 
