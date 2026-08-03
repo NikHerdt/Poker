@@ -1,4 +1,5 @@
-import type { RoomState, RoomConfig } from './shared/types';
+import type { BlindStructure, RoomState, RoomConfig } from './shared/types';
+import { DEFAULT_BLIND_MULTIPLIER, DEFAULT_MAX_BLIND_LEVEL } from './shared/blinds';
 import {
   ROOM_CODE_LENGTH,
   MIN_PLAYERS,
@@ -26,6 +27,34 @@ export interface Room {
 
 const rooms = new Map<string, Room>();
 
+/** Clamp a client-supplied blind structure into something the level math accepts. */
+export function sanitizeBlindStructure(structure: BlindStructure | undefined): BlindStructure | undefined {
+  if (!structure || structure.mode === 'none') return undefined;
+  if (structure.mode !== 'hands' && structure.mode !== 'time') return undefined;
+
+  const multiplier = Number(structure.multiplier);
+  const maxLevel = Number(structure.maxLevel);
+  const sanitized: BlindStructure = {
+    mode: structure.mode,
+    multiplier: Number.isFinite(multiplier) && multiplier > 1 ? multiplier : DEFAULT_BLIND_MULTIPLIER,
+    maxLevel:
+      Number.isFinite(maxLevel) && maxLevel >= 1
+        ? Math.min(Math.floor(maxLevel), 50)
+        : DEFAULT_MAX_BLIND_LEVEL,
+  };
+
+  if (structure.mode === 'hands') {
+    const hands = Math.floor(Number(structure.handsPerLevel));
+    if (!Number.isFinite(hands) || hands < 1) return undefined;
+    sanitized.handsPerLevel = hands;
+  } else {
+    const minutes = Number(structure.minutesPerLevel);
+    if (!Number.isFinite(minutes) || minutes <= 0) return undefined;
+    sanitized.minutesPerLevel = minutes;
+  }
+  return sanitized;
+}
+
 export function createRoom(hostId: string, hostName: string, config?: Partial<RoomConfig>): RoomState {
   let code = generateRoomCode();
   while (rooms.has(code)) code = generateRoomCode();
@@ -36,6 +65,8 @@ export function createRoom(hostId: string, hostName: string, config?: Partial<Ro
       smallBlind: config?.smallBlind ?? DEFAULT_SMALL_BLIND,
       bigBlind: config?.bigBlind ?? DEFAULT_BIG_BLIND,
       buyIn: config?.buyIn ?? DEFAULT_BUY_IN,
+      blindStructure: sanitizeBlindStructure(config?.blindStructure),
+      testMode: config?.testMode === true,
     },
     game: null,
     hostId,

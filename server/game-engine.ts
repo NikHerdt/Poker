@@ -1,4 +1,4 @@
-import type { Card, GameState, Player, Pot, RoomConfig, LastActionInfo } from './shared/types';
+import type { Card, GameState, Player, Pot, RoomConfig } from './shared/types';
 import {
   RANKS,
   SUITS,
@@ -7,7 +7,14 @@ import {
   DEFAULT_BIG_BLIND,
   DEFAULT_BUY_IN,
 } from './shared/constants';
-import { evaluateHand, evaluateHandOmaha, compareHandResults } from './hand-eval';
+import {
+  evaluateHand,
+  evaluateHandOmaha,
+  compareHandResults,
+  holdsSevenDeuce,
+  holdsSixNine,
+} from './hand-eval';
+import { parseCardCode, sameCard, type RiggedDeal } from './shared/test-scenarios';
 
 export function createDeck(): Card[] {
   const deck: Card[] = [];
@@ -55,26 +62,89 @@ function createPlayer(
   };
 }
 
-export function startHand(
-  playerIds: string[],
-  playerNames: Record<string, string>,
-  config: Partial<RoomConfig>,
-  handNumber: number,
-  previousChips?: Record<string, number>,
-  previousBuyInCounts?: Record<string, number>,
-  isPlo?: boolean
-): GameState {
-  const configSmallBlind = config.smallBlind ?? DEFAULT_SMALL_BLIND;
-  const configBigBlind = config.bigBlind ?? DEFAULT_BIG_BLIND;
-  const smallBlind = isPlo ? 2 * configSmallBlind : configSmallBlind;
-  const bigBlind = isPlo ? 2 * configBigBlind : configBigBlind;
+/**
+ * Build a deck whose deal order produces the cards a rigged deal asks for.
+ * Cards are dealt with `pop()`, so the planned sequence is appended reversed.
+ * Unspecified slots fall through to the shuffled remainder.
+ */
+export function stackDeck(deck: Card[], plan: (Card | null)[]): Card[] {
+  const wanted = plan.filter((c): c is Card => c != null);
+  const remaining = deck.filter((c) => !wanted.some((w) => sameCard(w, c)));
+  const sequence = plan.map((c) => {
+    if (c != null) return c;
+    const next = remaining.shift();
+    if (!next) throw new Error('Not enough cards to stack deck');
+    return next;
+  });
+  return [...remaining, ...sequence.reverse()];
+}
+
+/**
+ * Deal order for a hand: hole cards round by round, then burn + flop,
+ * burn + turn, burn + river. Returns the planned pop sequence with `null`
+ * wherever the rig does not care.
+ */
+function planFromRig(rig: RiggedDeal, playerCount: number, holeCardCount: number): (Card | null)[] {
+  const plan: (Card | null)[] = [];
+  for (let cardIdx = 0; cardIdx < holeCardCount; cardIdx++) {
+    for (let seat = 0; seat < playerCount; seat++) {
+      const code = rig.holeCards?.[seat]?.[cardIdx];
+      plan.push(code ? parseCardCode(code) : null);
+    }
+  }
+  const board = (rig.board ?? []).map(parseCardCode);
+  plan.push(null); // burn
+  plan.push(board[0] ?? null, board[1] ?? null, board[2] ?? null);
+  plan.push(null); // burn
+  plan.push(board[3] ?? null);
+  plan.push(null); // burn
+  plan.push(board[4] ?? null);
+  return plan;
+}
+
+export interface StartHandOptions {
+  playerIds: string[];
+  playerNames: Record<string, string>;
+  config: Partial<RoomConfig>;
+  handNumber: number;
+  previousChips?: Record<string, number>;
+  previousBuyInCounts?: Record<string, number>;
+  isPlo?: boolean;
+  /** Blinds for this hand once the blind level is applied; defaults to the config blinds. */
+  smallBlind?: number;
+  bigBlind?: number;
+  blindLevel?: number;
+  /** Test mode: stack the deck for this hand. */
+  rig?: RiggedDeal;
+  testScenario?: string;
+}
+
+export function startHand(options: StartHandOptions): GameState {
+  const {
+    playerIds,
+    playerNames,
+    config,
+    handNumber,
+    previousChips,
+    previousBuyInCounts,
+    isPlo,
+    rig,
+    testScenario,
+  } = options;
+
+  const levelSmallBlind = options.smallBlind ?? config.smallBlind ?? DEFAULT_SMALL_BLIND;
+  const levelBigBlind = options.bigBlind ?? config.bigBlind ?? DEFAULT_BIG_BLIND;
+  const smallBlind = isPlo ? 2 * levelSmallBlind : levelSmallBlind;
+  const bigBlind = isPlo ? 2 * levelBigBlind : levelBigBlind;
   const buyIn = config.buyIn ?? DEFAULT_BUY_IN;
 
   if (playerIds.length < MIN_PLAYERS) {
     throw new Error('Not enough players to start');
   }
 
-  const deck = shuffle(createDeck());
+  const holeCardCount = isPlo ? 4 : 2;
+  let deck = shuffle(createDeck());
+  if (rig) deck = stackDeck(deck, planFromRig(rig, playerIds.length, holeCardCount));
   const dealerIndex = (handNumber - 1) % playerIds.length;
   const sbIndex = (dealerIndex + 1) % playerIds.length;
   const bbIndex = (dealerIndex + 2) % playerIds.length;
@@ -93,7 +163,6 @@ export function startHand(
     );
   });
 
-  const holeCardCount = isPlo ? 4 : 2;
   for (let i = 0; i < holeCardCount; i++) {
     for (let p = 0; p < players.length; p++) {
       const card = deck.pop()!;
@@ -102,9 +171,8 @@ export function startHand(
   }
 
   if (isPlo) {
-    const doubleBb = 2 * configBigBlind;
     for (const p of players) {
-      const post = Math.min(doubleBb, p.chips);
+      const post = Math.min(bigBlind, p.chips);
       p.chips -= post;
       p.currentBet = post;
       p.totalBetThisHand = post;
@@ -142,20 +210,23 @@ export function startHand(
       deck,
       handNumber,
       isPlo: true,
+      smallBlind,
+      bigBlind,
+      blindLevel: options.blindLevel ?? 1,
+      testScenario,
     };
   }
 
-  const sbPlayer = players[sbIndex];
-  const bbPlayer = players[bbIndex];
-  sbPlayer.chips -= Math.min(smallBlind, sbPlayer.chips);
-  sbPlayer.currentBet = Math.min(smallBlind, sbPlayer.chips + smallBlind);
-  sbPlayer.totalBetThisHand = sbPlayer.currentBet;
-  if (sbPlayer.chips <= 0) sbPlayer.allIn = true;
-
-  bbPlayer.chips -= Math.min(bigBlind, bbPlayer.chips);
-  bbPlayer.currentBet = Math.min(bigBlind, bbPlayer.chips + bigBlind);
-  bbPlayer.totalBetThisHand = bbPlayer.currentBet;
-  if (bbPlayer.chips <= 0) bbPlayer.allIn = true;
+  /** A player shorter than the blind posts what they have and is all-in. */
+  const postBlind = (player: Player, blind: number) => {
+    const post = Math.min(blind, player.chips);
+    player.chips -= post;
+    player.currentBet = post;
+    player.totalBetThisHand = post;
+    if (player.chips <= 0) player.allIn = true;
+  };
+  postBlind(players[sbIndex], smallBlind);
+  postBlind(players[bbIndex], bigBlind);
 
   const currentBet = bigBlind;
   const minRaise = bigBlind;
@@ -184,7 +255,49 @@ export function startHand(
     deck,
     handNumber,
     isPlo: false,
+    smallBlind,
+    bigBlind,
+    blindLevel: options.blindLevel ?? 1,
+    testScenario,
   };
+}
+
+/**
+ * Pay a house rule bonus to `winnerId`: every other player dealt into the hand
+ * pays, capped at the chips they have left so the table's chip total is
+ * unchanged. Folding does not get you out of it.
+ */
+function collectHouseRuleBonus(state: GameState, winnerId: string, blind: number): number {
+  const winner = state.players.find((p) => p.id === winnerId);
+  if (!winner) return 0;
+  let collected = 0;
+  for (const payer of state.players) {
+    if (payer.id === winnerId) continue;
+    const pay = Math.min(blind, Math.max(0, payer.chips));
+    payer.chips -= pay;
+    collected += pay;
+  }
+  winner.chips += collected;
+  return collected;
+}
+
+/** Apply the 7-2 / 6-9 bonuses for each winner flagged as holding them. */
+function applyHouseRuleBonuses(
+  state: GameState,
+  flagsByWinner: Map<string, { is72?: boolean; is69?: boolean }>
+): void {
+  const bonuses: NonNullable<GameState['houseRuleBonuses']> = [];
+  for (const [winnerId, flags] of flagsByWinner) {
+    if (flags.is72) {
+      const amount = collectHouseRuleBonus(state, winnerId, state.bigBlind);
+      if (amount > 0) bonuses.push({ playerId: winnerId, type: '72', amount });
+    }
+    if (flags.is69) {
+      const amount = collectHouseRuleBonus(state, winnerId, state.smallBlind);
+      if (amount > 0) bonuses.push({ playerId: winnerId, type: '69', amount });
+    }
+  }
+  state.houseRuleBonuses = bonuses.length > 0 ? bonuses : undefined;
 }
 
 function collectBets(state: GameState): void {
@@ -197,6 +310,9 @@ function collectBets(state: GameState): void {
     { amount: total, eligiblePlayerIds: state.players.filter((p) => !p.folded).map((p) => p.id) },
   ];
   state.currentBet = 0;
+  // The round is closed: its raises have been matched and folded into the pot,
+  // so there is nothing left for a field goal to reverse.
+  state.lastAction = undefined;
 }
 
 function buildSidePots(state: GameState): Pot[] {
@@ -327,9 +443,7 @@ function bettingRoundComplete(state: GameState): boolean {
 export function applyAction(
   state: GameState,
   playerId: string,
-  action: { type: 'fold' | 'check' | 'call' | 'raise' | 'all_in'; amount?: number },
-  bigBlind: number,
-  smallBlind: number
+  action: { type: 'fold' | 'check' | 'call' | 'raise' | 'all_in'; amount?: number }
 ): void {
   const idx = state.players.findIndex((p) => p.id === playerId);
   if (idx < 0 || idx !== state.actingPlayerIndex) throw new Error('Not your turn');
@@ -343,9 +457,18 @@ export function applyAction(
     state.lastAction = { playerId: player.id, action: 'fold' };
     const remaining = state.players.filter((p) => !p.folded);
     if (remaining.length === 1) {
+      const winner = remaining[0];
       const totalPot = state.players.reduce((s, p) => s + p.totalBetThisHand, 0);
-      remaining[0].chips += totalPot;
-      state.winnerIds = [remaining[0].id];
+      winner.chips += totalPot;
+      state.winnerIds = [winner.id];
+      // Winning without a showdown still pays the 7-2 / 6-9 bonus: there is no
+      // board to rank, so holding the cards is the whole rule.
+      applyHouseRuleBonuses(
+        state,
+        new Map([
+          [winner.id, { is72: holdsSevenDeuce(winner.holeCards), is69: holdsSixNine(winner.holeCards) }],
+        ])
+      );
       state.phase = 'finished';
       return;
     }
@@ -397,7 +520,7 @@ export function applyAction(
     const activeCount = state.players.filter((p) => !p.folded).length;
     if (activeCount <= 1) {
       state.phase = 'showdown';
-      runShowdown(state, bigBlind, smallBlind);
+      runShowdown(state);
       return;
     }
     if (state.phase === 'preflop') dealFlop(state);
@@ -405,14 +528,14 @@ export function applyAction(
     else if (state.phase === 'turn') dealRiver(state);
     else if (state.phase === 'river') {
       state.phase = 'showdown';
-      runShowdown(state, bigBlind, smallBlind);
+      runShowdown(state);
       return;
     }
-    advanceStreetsUntilSomeoneCanActOrShowdown(state, bigBlind, smallBlind);
+    advanceStreetsUntilSomeoneCanActOrShowdown(state);
   }
 }
 
-function advanceStreetsUntilSomeoneCanActOrShowdown(state: GameState, bigBlind: number, smallBlind: number): void {
+function advanceStreetsUntilSomeoneCanActOrShowdown(state: GameState): void {
   while (state.phase !== 'showdown' && state.phase !== 'finished') {
     if (noPlayerCanAct(state)) {
       if (state.phase === 'preflop') dealFlop(state);
@@ -420,7 +543,7 @@ function advanceStreetsUntilSomeoneCanActOrShowdown(state: GameState, bigBlind: 
       else if (state.phase === 'turn') dealRiver(state);
       else if (state.phase === 'river') {
         state.phase = 'showdown';
-        runShowdown(state, bigBlind, smallBlind);
+        runShowdown(state);
         return;
       }
       continue;
@@ -435,7 +558,7 @@ function advanceStreetsUntilSomeoneCanActOrShowdown(state: GameState, bigBlind: 
         const activeCount = state.players.filter((p) => !p.folded).length;
         if (activeCount <= 1) {
           state.phase = 'showdown';
-          runShowdown(state, bigBlind, smallBlind);
+          runShowdown(state);
           return;
         }
         if (state.phase === 'preflop') dealFlop(state);
@@ -443,7 +566,7 @@ function advanceStreetsUntilSomeoneCanActOrShowdown(state: GameState, bigBlind: 
         else if (state.phase === 'turn') dealRiver(state);
         else if (state.phase === 'river') {
           state.phase = 'showdown';
-          runShowdown(state, bigBlind, smallBlind);
+          runShowdown(state);
           return;
         }
         continue;
@@ -453,7 +576,7 @@ function advanceStreetsUntilSomeoneCanActOrShowdown(state: GameState, bigBlind: 
   }
 }
 
-function runShowdown(state: GameState, bigBlind: number, smallBlind: number): void {
+function runShowdown(state: GameState): void {
   state.pots = buildSidePots(state);
 
   const inHand = state.players.filter((p) => !p.folded);
@@ -498,28 +621,12 @@ function runShowdown(state: GameState, bigBlind: number, smallBlind: number): vo
   state.winnerIds = winnerIds;
   state.lastWinningHand = lastWinningHand;
 
-  const bonuses: GameState['houseRuleBonuses'] = [];
-  const effectiveBigBlind = state.isPlo ? bigBlind * 2 : bigBlind;
-  const effectiveSmallBlind = state.isPlo ? smallBlind * 2 : smallBlind;
-  const bigBlindCfg = state.players[0] ? (state.players[0].isBigBlind ? effectiveBigBlind : 0) : 0;
-  const smallBlindCfg = effectiveSmallBlind;
-  for (const wid of winnerIds) {
-    const player = state.players.find((p) => p.id === wid)!;
-    const result = handResults.get(wid)!;
-    if (result.is72) {
-      const payers = state.players.filter((p) => p.id !== wid && !p.folded);
-      const total = payers.length * bigBlind;
-      player.chips += total;
-      bonuses.push({ playerId: wid, type: '72', amount: total });
-    }
-    if (result.is69) {
-      const payers = state.players.filter((p) => p.id !== wid && !p.folded);
-      const total = payers.length * smallBlind;
-      player.chips += total;
-      bonuses.push({ playerId: wid, type: '69', amount: total });
-    }
-  }
-  state.houseRuleBonuses = bonuses.length > 0 ? bonuses : undefined;
+  // At a showdown the 7-2 / 6-9 hand has to be the one that actually won, as
+  // high card — see holdsSevenDeuce vs. HandResult.is72.
+  applyHouseRuleBonuses(
+    state,
+    new Map(winnerIds.map((id) => [id, handResults.get(id)!]))
+  );
   state.phase = 'finished';
 }
 
@@ -532,6 +639,9 @@ export function canAct(state: GameState, playerId: string): boolean {
 }
 
 export function canFieldGoal(state: GameState, playerId: string, fieldGoalUsed: Record<string, boolean> | undefined): boolean {
+  if (state.phase !== 'preflop' && state.phase !== 'flop' && state.phase !== 'turn' && state.phase !== 'river') {
+    return false;
+  }
   if (!state.lastAction || state.lastAction.action !== 'raise') return false;
   if (state.lastAction.playerId === playerId) return false;
   if (fieldGoalUsed?.[playerId]) return false;
@@ -550,9 +660,8 @@ export function reverseLastRaise(state: GameState): void {
   player.totalBetThisHand -= amountToReverse;
   player.chips += amountToReverse;
   if (player.chips > 0) player.allIn = false;
-  if (state.pots.length > 0 && state.pots[0].amount >= amountToReverse) {
-    state.pots[0].amount -= amountToReverse;
-  }
+  // `pots` only holds chips from rounds that have already closed, and a raise
+  // is reversible only inside its own round, so there is nothing to subtract.
   state.currentBet = Math.max(0, ...state.players.map((p) => p.currentBet));
 
   const raiserIdx = state.players.findIndex((p) => p.id === last.playerId);
@@ -575,13 +684,13 @@ export function reverseLastRaise(state: GameState): void {
   state.actingPlayerIndex = next >= 0 ? next : raiserIdx;
 }
 
-export function advanceIfBettingRoundComplete(state: GameState, bigBlind: number, smallBlind: number): void {
+export function advanceIfBettingRoundComplete(state: GameState): void {
   if (!bettingRoundComplete(state)) return;
   state.pots = buildSidePots(state);
   const activeCount = state.players.filter((p) => !p.folded).length;
   if (activeCount <= 1) {
     state.phase = 'showdown';
-    runShowdown(state, bigBlind, smallBlind);
+    runShowdown(state);
     return;
   }
   if (state.phase === 'preflop') dealFlop(state);
@@ -589,10 +698,10 @@ export function advanceIfBettingRoundComplete(state: GameState, bigBlind: number
   else if (state.phase === 'turn') dealRiver(state);
   else if (state.phase === 'river') {
     state.phase = 'showdown';
-    runShowdown(state, bigBlind, smallBlind);
+    runShowdown(state);
     return;
   }
-  advanceStreetsUntilSomeoneCanActOrShowdown(state, bigBlind, smallBlind);
+  advanceStreetsUntilSomeoneCanActOrShowdown(state);
 }
 
 function nextActingPlayerFrom(state: GameState, fromIndex: number): number {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const POWER_ZONE = { min: 40, max: 60 };
 const DIRECTION_ZONE = { min: -15, max: 15 };
@@ -16,6 +16,8 @@ export function FieldGoalMinigame({ onComplete }: FieldGoalMinigameProps) {
   const [powerVel, setPowerVel] = useState(4);
   const [directionVel, setDirectionVel] = useState(3.75);
   const [result, setResult] = useState<boolean | null>(null);
+  /** Swallows the click a touch device synthesizes after pointerdown. */
+  const lastTriggerAt = useRef(0);
 
   useEffect(() => {
     if (phase !== 'power' || powerLocked) return;
@@ -53,26 +55,35 @@ export function FieldGoalMinigame({ onComplete }: FieldGoalMinigameProps) {
     setDirectionVel((v) => (direction >= 50 ? -3.75 : direction <= -50 ? 3.75 : v));
   }, [phase, direction]);
 
+  /** One "kick" input, however it arrived: space bar, mouse click or tap. */
+  const trigger = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTriggerAt.current < 150) return;
+    lastTriggerAt.current = now;
+
+    if (phase === 'power' && !powerLocked) {
+      setPowerLocked(true);
+      setTimeout(() => setPhase('direction'), 400);
+    } else if (phase === 'direction' && !directionLocked) {
+      setDirectionLocked(true);
+      const success =
+        power >= POWER_ZONE.min &&
+        power <= POWER_ZONE.max &&
+        direction >= DIRECTION_ZONE.min &&
+        direction <= DIRECTION_ZONE.max;
+      setResult(success);
+      setPhase('result');
+      setTimeout(() => onComplete(success), 1500);
+    }
+  }, [phase, powerLocked, directionLocked, power, direction, onComplete]);
+
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
-      if (e.code !== 'Space') return;
+      if (e.code !== 'Space' && e.code !== 'Enter' && e.code !== 'NumpadEnter') return;
       e.preventDefault();
-      if (phase === 'power' && !powerLocked) {
-        setPowerLocked(true);
-        setTimeout(() => setPhase('direction'), 400);
-      } else if (phase === 'direction' && !directionLocked) {
-        setDirectionLocked(true);
-        const success =
-          power >= POWER_ZONE.min &&
-          power <= POWER_ZONE.max &&
-          direction >= DIRECTION_ZONE.min &&
-          direction <= DIRECTION_ZONE.max;
-        setResult(success);
-        setPhase('result');
-        setTimeout(() => onComplete(success), 1500);
-      }
+      trigger();
     },
-    [phase, powerLocked, directionLocked, power, direction, onComplete]
+    [trigger]
   );
 
   useEffect(() => {
@@ -80,13 +91,26 @@ export function FieldGoalMinigame({ onComplete }: FieldGoalMinigameProps) {
     return () => window.removeEventListener('keydown', handleKey);
   }, [handleKey]);
 
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // Stop the tap from scrolling the table underneath or double-firing as a click.
+    e.preventDefault();
+    trigger();
+  };
+
+  const armed = phase === 'power' ? !powerLocked : phase === 'direction' ? !directionLocked : false;
+
   return (
-    <div className="fieldgoal-overlay">
+    <div
+      className="fieldgoal-overlay"
+      onPointerDown={phase === 'result' ? undefined : handlePointerDown}
+      onContextMenu={(e) => e.preventDefault()}
+      role="presentation"
+    >
       <div className="fieldgoal-modal">
         <h2 className="fieldgoal-title">Field Goal</h2>
         {phase === 'power' && (
           <div className="fieldgoal-phase">
-            <p className="fieldgoal-instruction">Press SPACE to set power</p>
+            <p className="fieldgoal-instruction">Tap anywhere (or press SPACE) to set power</p>
             <div className="fieldgoal-power-bar">
               <div className="fieldgoal-power-zone" />
               <div
@@ -98,7 +122,7 @@ export function FieldGoalMinigame({ onComplete }: FieldGoalMinigameProps) {
         )}
         {phase === 'direction' && (
           <div className="fieldgoal-phase">
-            <p className="fieldgoal-instruction">Press SPACE to set direction</p>
+            <p className="fieldgoal-instruction">Tap anywhere (or press SPACE) to set direction</p>
             <div className="fieldgoal-direction-wrap">
               <div className="fieldgoal-direction-zone" />
               <div
@@ -119,6 +143,19 @@ export function FieldGoalMinigame({ onComplete }: FieldGoalMinigameProps) {
               {result ? 'Good!' : 'No good'}
             </p>
           </div>
+        )}
+        {phase !== 'result' && (
+          <button
+            type="button"
+            className="fieldgoal-kick-btn"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              handlePointerDown(e);
+            }}
+            disabled={!armed}
+          >
+            {phase === 'power' ? 'Set power' : 'Kick'}
+          </button>
         )}
       </div>
     </div>

@@ -157,6 +157,18 @@ function evaluateFive(cards: Card[]): Omit<HandResult, 'is72' | 'is69' | 'pairCo
   };
 }
 
+/** Hole cards containing both a 7 and a 2 — the 7-2 house rule, board aside. */
+export function holdsSevenDeuce(holeCards: Card[]): boolean {
+  const values = new Set(holeCards.map(cardValue));
+  return values.has(7) && values.has(2);
+}
+
+/** Hole cards containing both a 6 and a 9 — the 6-9 house rule, board aside. */
+export function holdsSixNine(holeCards: Card[]): boolean {
+  const values = new Set(holeCards.map(cardValue));
+  return values.has(6) && values.has(9);
+}
+
 function countPairsInSeven(cards: Card[]): number {
   const byRank = countByRank(cards);
   let pairs = 0;
@@ -192,11 +204,8 @@ export function evaluateHand(holeCards: Card[], communityCards: Card[]): HandRes
 
   if (!best) throw new Error('No hand evaluated');
 
-  const holeValues = new Set(holeCards.map(cardValue));
-  const is72 = holeValues.has(7) && holeValues.has(2) && best.rank === 'high_card';
-  const is69 = holeValues.has(6) && holeValues.has(9) && best.rank === 'high_card';
-  best.is72 = is72;
-  best.is69 = is69;
+  best.is72 = holdsSevenDeuce(holeCards) && best.rank === 'high_card';
+  best.is69 = holdsSixNine(holeCards) && best.rank === 'high_card';
 
   return best;
 }
@@ -230,11 +239,8 @@ export function evaluateHandOmaha(holeCards: Card[], communityCards: Card[]): Ha
 
   if (!best) throw new Error('No hand evaluated');
 
-  const holeValues = new Set(holeCards.map(cardValue));
-  const is72 = holeValues.has(7) && holeValues.has(2) && best.rank === 'high_card';
-  const is69 = holeValues.has(6) && holeValues.has(9) && best.rank === 'high_card';
-  best.is72 = is72;
-  best.is69 = is69;
+  best.is72 = holdsSevenDeuce(holeCards) && best.rank === 'high_card';
+  best.is69 = holdsSixNine(holeCards) && best.rank === 'high_card';
 
   return best;
 }

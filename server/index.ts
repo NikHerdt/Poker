@@ -14,6 +14,8 @@ import {
   type Room,
 } from './room-manager';
 import { MIN_PLAYERS } from './shared/constants';
+import { tournamentStateForHand } from './shared/blinds';
+import { getTestScenario } from './shared/test-scenarios';
 import {
   startHand,
   applyAction,
@@ -37,16 +39,11 @@ const httpServer = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server: httpServer });
 
-const DEFAULT_BIG_BLIND = 10;
-const DEFAULT_SMALL_BLIND = 5;
-
 /** If no one can act (e.g. all remaining players all-in), run out the board to showdown. */
 function ensureGameAdvanced(room: Room | null): void {
   const game = room?.state?.game;
   if (!game || game.phase === 'showdown' || game.phase === 'finished') return;
-  const bigBlind = room.state.config?.bigBlind ?? DEFAULT_BIG_BLIND;
-  const smallBlind = room.state.config?.smallBlind ?? DEFAULT_SMALL_BLIND;
-  advanceIfBettingRoundComplete(game, bigBlind, smallBlind);
+  advanceIfBettingRoundComplete(game);
 }
 
 /** Run game advance then set rebuy state when finished so all clients see rebuy popup. */
@@ -54,6 +51,7 @@ function ensureRoomStateBeforeSend(room: Room | null): void {
   if (!room) return;
   ensureGameAdvanced(room);
   if (room.state.game?.phase === 'finished') ensureRebuyStateWhenFinished(room.state.roomCode);
+  if (room.state.tournament) room.state.tournament.serverNowMs = Date.now();
 }
 
 function broadcast(roomCode: string, message: object): void {
@@ -224,15 +222,36 @@ wss.on('connection', (ws) => {
           }
         }
 
-        const game = startHand(
-          activePlayerIds,
-          room.state.playerIdToName,
+        const now = Date.now();
+        const startedAtMs = room.state.tournament?.startedAtMs ?? now;
+        const tournament = tournamentStateForHand(
           room.state.config,
+          handNumber,
+          startedAtMs,
+          now,
+          room.state.tournament
+        );
+        room.state.tournament = tournament;
+
+        const scenario = room.state.config.testMode
+          ? getTestScenario(room.state.pendingTestScenario)
+          : undefined;
+
+        const game = startHand({
+          playerIds: activePlayerIds,
+          playerNames: room.state.playerIdToName,
+          config: room.state.config,
           handNumber,
           previousChips,
           previousBuyInCounts,
-          isPlo
-        );
+          isPlo,
+          smallBlind: tournament.smallBlind,
+          bigBlind: tournament.bigBlind,
+          blindLevel: tournament.level,
+          rig: scenario?.deal,
+          testScenario: scenario?.id,
+        });
+        room.state.pendingTestScenario = undefined;
         room.state.game = game;
         if (!room.state.playerIdToBuyInCount) room.state.playerIdToBuyInCount = {};
         for (const p of game.players) {
@@ -259,9 +278,8 @@ wss.on('connection', (ws) => {
           return;
         }
         const action = msg.action as PlayerAction;
-        const { bigBlind, smallBlind } = room.state.config;
         try {
-          applyAction(game, currentPlayerId, action, bigBlind, smallBlind);
+          applyAction(game, currentPlayerId, action);
         } catch (err) {
           ws.send(JSON.stringify({ type: 'error', error: (err as Error).message }));
           return;
@@ -291,8 +309,7 @@ wss.on('connection', (ws) => {
         const success = msg.fieldGoalSuccess === true;
         if (success) {
           reverseLastRaise(game);
-          const { bigBlind, smallBlind } = room.state.config;
-          advanceIfBettingRoundComplete(game, bigBlind, smallBlind);
+          advanceIfBettingRoundComplete(game);
           if (!room.state.fieldGoalUsed) room.state.fieldGoalUsed = {};
           room.state.fieldGoalUsed[currentPlayerId] = true;
         }
@@ -377,6 +394,29 @@ wss.on('connection', (ws) => {
           room.state.ploVote = undefined;
           room.state.ploVoteInitiator = undefined;
         }
+        ensureRoomStateBeforeSend(room);
+        broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+        return;
+      }
+
+      if (msg.type === 'set_test_scenario') {
+        if (!currentRoomCode || !currentPlayerId) return;
+        const room = getRoom(currentRoomCode);
+        if (!room) return;
+        if (!room.state.config.testMode) {
+          ws.send(JSON.stringify({ type: 'error', error: 'Test mode is not enabled for this room' }));
+          return;
+        }
+        if (room.state.hostId !== currentPlayerId) {
+          ws.send(JSON.stringify({ type: 'error', error: 'Only the host can queue a test scenario' }));
+          return;
+        }
+        const requested = msg.testScenario ?? null;
+        if (requested && !getTestScenario(requested)) {
+          ws.send(JSON.stringify({ type: 'error', error: 'Unknown test scenario' }));
+          return;
+        }
+        room.state.pendingTestScenario = requested ?? undefined;
         ensureRoomStateBeforeSend(room);
         broadcast(currentRoomCode, { type: 'room_state', state: room.state });
         return;

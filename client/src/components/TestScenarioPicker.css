@@ -1,0 +1,54 @@
+.test-panel {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px dashed var(--border-mid);
+  border-radius: var(--radius-md);
+  background: rgba(255, 200, 60, 0.06);
+  text-align: left;
+}
+
+.test-panel-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.6rem;
+}
+
+.test-scenario-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.test-scenario-btn {
+  padding: 0.5rem 0.8rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.test-scenario-btn.selected {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+}
+
+.test-panel-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.test-mode-chip {
+  padding: 0.15rem 0.5rem;
+  border: 1px dashed var(--border-mid);
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}

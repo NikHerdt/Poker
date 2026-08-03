@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import type { RoomState, Card, Player, GameState } from 'shared/types';
 import type { UseGameSocketResult } from '../hooks/useGameSocket';
 import { evaluateHand, evaluateHandOmaha, formatHandDescription } from 'shared/hand-eval';
+import { getTestScenario } from 'shared/test-scenarios';
 import { CardImage } from './CardImage';
+import { BlindLevelBadge } from './BlindLevelBadge';
+import { TestScenarioPicker } from './TestScenarioPicker';
 import { FieldGoalMinigame } from './FieldGoalMinigame';
 import './Table.css';
 import './FieldGoalMinigame.css';
@@ -20,7 +23,11 @@ export function Table({ state, playerId, socket }: TableProps) {
   const me = game.players.find((p: Player) => p.id === playerId);
   const isMyTurn = me && game.phase !== 'showdown' && game.phase !== 'finished' && game.actingPlayerIndex >= 0 && game.players[game.actingPlayerIndex]?.id === playerId && !me.folded && !me.allIn;
   const canAct = isMyTurn;
-  const totalPot = game.pots.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
+  // Everything committed this hand. `pots` only covers betting rounds that have
+  // closed, so mid-round it would leave out the bets sitting in front of players.
+  const totalPot = game.players.reduce((s: number, p: Player) => s + p.totalBetThisHand, 0);
+  /** Pot as the pot-limit rule sees it — mirrors the server's PLO raise cap. */
+  const collectedPot = game.pots.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
 
   const [turnSecondsLeft, setTurnSecondsLeft] = useState<number | null>(null);
   useEffect(() => {
@@ -41,7 +48,7 @@ export function Table({ state, playerId, socket }: TableProps) {
   let raiseMax = me ? me.currentBet + me.chips : raiseMin;
   if (game.isPlo && me) {
     const currentBetsTotal = game.players.reduce((s: number, p: Player) => s + p.currentBet, 0);
-    const potForLimit = totalPot + currentBetsTotal;
+    const potForLimit = collectedPot + currentBetsTotal;
     const potLimitMax = me.currentBet + potForLimit;
     raiseMax = Math.min(potLimitMax, me.currentBet + me.chips);
     raiseMin = Math.max(raiseMin, game.currentBet + 1);
@@ -92,10 +99,18 @@ export function Table({ state, playerId, socket }: TableProps) {
           {game.isPlo ? ' – PLO – ' : ' – '}
           {game.phase}
         </span>
+        <BlindLevelBadge state={state} game={game} />
+        {state.config.testMode && <span className="test-mode-chip">Test mode</span>}
         <button type="button" className="leave-btn" onClick={socket.leaveRoom}>
           Leave
         </button>
       </div>
+
+      {game.testScenario && (
+        <div className="test-banner">
+          Rigged hand: {getTestScenario(game.testScenario)?.expectation}
+        </div>
+      )}
 
       <div className="table-felt">
         <div className="pot-area">
@@ -200,6 +215,13 @@ export function Table({ state, playerId, socket }: TableProps) {
             }
             return null;
           })()}
+          {state.config.testMode && (
+            <TestScenarioPicker
+              isHost={state.hostId === playerId}
+              pendingScenario={state.pendingTestScenario}
+              onSelect={socket.sendTestScenario}
+            />
+          )}
           {!state.ploVoteConcluded && !state.ploVote && (
             <div className="plo-vote-section">
               <button type="button" className="plo-vote-btn" onClick={socket.sendPloVoteStart}>

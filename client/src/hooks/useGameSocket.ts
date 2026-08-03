@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RoomState, ClientMessage, ServerMessage } from 'shared/types';
+import type { RoomState, RoomConfig, ClientMessage, ServerMessage } from 'shared/types';
+
+export type CreateRoomConfig = Partial<RoomConfig>;
 
 function getWsUrl(): string {
   if (typeof window === 'undefined') return '';
@@ -19,7 +21,7 @@ export interface UseGameSocketResult {
   roomCode: string | null;
   error: string | null;
   connected: boolean;
-  createRoom: (playerName: string, config?: { smallBlind?: number; bigBlind?: number; buyIn?: number }) => void;
+  createRoom: (playerName: string, config?: CreateRoomConfig) => void;
   joinRoom: (roomCode: string, playerName: string) => void;
   startGame: () => void;
   sendAction: (action: { type: 'fold' | 'check' | 'call' | 'raise' | 'all_in'; amount?: number }) => void;
@@ -32,6 +34,7 @@ export interface UseGameSocketResult {
   sendPloVoteStart: () => void;
   sendPloVoteYes: () => void;
   sendPloVoteNo: () => void;
+  sendTestScenario: (scenarioId: string | null) => void;
 }
 
 export function useGameSocket(): UseGameSocketResult {
@@ -49,7 +52,7 @@ export function useGameSocket(): UseGameSocketResult {
   }, []);
 
   const createRoom = useCallback(
-    (playerName: string, config?: { smallBlind?: number; bigBlind?: number; buyIn?: number }) => {
+    (playerName: string, config?: CreateRoomConfig) => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         send({ type: 'create_room', playerName, config });
       }
@@ -124,6 +127,15 @@ export function useGameSocket(): UseGameSocketResult {
     if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'plo_vote_no' });
   }, [send]);
 
+  const sendTestScenario = useCallback(
+    (scenarioId: string | null) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        send({ type: 'set_test_scenario', testScenario: scenarioId });
+      }
+    },
+    [send]
+  );
+
   const clearError = useCallback(() => setError(null), []);
 
   useEffect(() => {
@@ -190,5 +202,6 @@ export function useGameSocket(): UseGameSocketResult {
     sendPloVoteStart,
     sendPloVoteYes,
     sendPloVoteNo,
+    sendTestScenario,
   };
 }

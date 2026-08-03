@@ -6,6 +6,12 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  /* The whole overlay is the tap target: no scrolling, zooming or text selection. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
 }
 
 .fieldgoal-modal {
@@ -14,7 +20,33 @@
   border-radius: var(--radius-lg);
   padding: 2rem;
   min-width: 320px;
+  max-width: min(92vw, 420px);
   box-shadow: var(--shadow-lg);
+  touch-action: none;
+}
+
+.fieldgoal-kick-btn {
+  display: block;
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--accent-green);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fieldgoal-kick-btn:active {
+  filter: brightness(1.15);
+}
+
+.fieldgoal-kick-btn:disabled {
+  opacity: 0.5;
 }
 
 .fieldgoal-title {
@@ -167,4 +199,27 @@
 .fieldgoal-btn-used {
   opacity: 0.5;
   filter: grayscale(0.5);
+}
+
+/* Phones: shrink the gauges so the modal and its tap target fit on screen. */
+@media (max-width: 480px), (max-height: 640px) {
+  .fieldgoal-modal {
+    padding: 1.25rem;
+    min-width: 0;
+    width: min(92vw, 360px);
+  }
+
+  .fieldgoal-title {
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+  }
+
+  .fieldgoal-power-bar {
+    height: 150px;
+  }
+
+  .fieldgoal-direction-wrap {
+    width: 100%;
+    max-width: 280px;
+  }
 }

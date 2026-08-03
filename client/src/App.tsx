@@ -31,8 +31,11 @@ export default function App() {
           playerId={playerId ?? undefined}
           isHost={state.hostId === playerId}
           playerCount={Object.keys(state.playerIdToName).length}
+          config={state.config}
+          pendingTestScenario={state.pendingTestScenario}
           onLeave={leaveRoom}
           onStartGame={socket.startGame}
+          onSelectTestScenario={socket.sendTestScenario}
         />
       )}
       {connected && state?.game && (

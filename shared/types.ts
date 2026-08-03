@@ -59,10 +59,49 @@ export interface Pot {
   eligiblePlayerIds: string[];
 }
 
+/** How (if at all) blinds go up over the course of a session. */
+export type BlindIncreaseMode = 'none' | 'hands' | 'time';
+
+export interface BlindStructure {
+  mode: BlindIncreaseMode;
+  /** Hands played per level, when mode is 'hands'. */
+  handsPerLevel?: number;
+  /** Minutes per level, when mode is 'time'. */
+  minutesPerLevel?: number;
+  /** Blinds are multiplied by this for each level above 1. Default 2. */
+  multiplier?: number;
+  /** Blinds stop increasing at this level. Default 12. */
+  maxLevel?: number;
+}
+
 export interface RoomConfig {
   smallBlind: number;
   bigBlind: number;
   buyIn: number;
+  /** Optional tournament-style blind increases. */
+  blindStructure?: BlindStructure;
+  /** Test mode: host can deal rigged hands to verify house rules. */
+  testMode?: boolean;
+}
+
+/** Blind-level bookkeeping for the room; recomputed when each hand starts. */
+export interface TournamentState {
+  /** 1-based level used by the current hand. */
+  level: number;
+  smallBlind: number;
+  bigBlind: number;
+  /** Epoch ms when the first hand of the session started (time mode). */
+  startedAtMs: number;
+  /** Hand number the current level started on. */
+  levelStartedAtHand: number;
+  /** Hand number the next level starts on ('hands' mode). */
+  nextLevelAtHand?: number;
+  /** Epoch ms when the next level starts ('time' mode). */
+  nextLevelAtMs?: number;
+  /** Server clock at broadcast time, so clients can render an unskewed countdown. */
+  serverNowMs?: number;
+  /** True once maxLevel has been reached and blinds no longer increase. */
+  atMaxLevel?: boolean;
 }
 
 export interface LastActionInfo {
@@ -89,6 +128,13 @@ export interface GameState {
   lastAction?: LastActionInfo;
   /** This hand is Pot Limit Omaha (4 cards, pot limit, Omaha eval). */
   isPlo?: boolean;
+  /** Blinds actually posted this hand (after blind level and any PLO doubling). */
+  smallBlind: number;
+  bigBlind: number;
+  /** Blind level this hand was dealt at (1 when no blind structure is configured). */
+  blindLevel?: number;
+  /** Set when the hand was dealt by test mode with a rigged deck. */
+  testScenario?: string;
 }
 
 export interface RoomState {
@@ -113,6 +159,10 @@ export interface RoomState {
   ploRoundAnchorHasBeenDealer?: boolean;
   /** True after a PLO vote was concluded this hand; hide PLO vote UI until next hand. */
   ploVoteConcluded?: boolean;
+  /** Blind level tracking; present once the first hand has been dealt. */
+  tournament?: TournamentState;
+  /** Test mode only: scenario the host queued for the next hand. */
+  pendingTestScenario?: string;
 }
 
 export type ClientMessageType =
@@ -127,7 +177,8 @@ export type ClientMessageType =
   | 'request_rebuy'
   | 'plo_vote_start'
   | 'plo_vote_yes'
-  | 'plo_vote_no';
+  | 'plo_vote_no'
+  | 'set_test_scenario';
 
 export type ServerMessageType =
   | 'room_created'
@@ -143,6 +194,8 @@ export interface ClientMessage {
   config?: Partial<RoomConfig>;
   action?: PlayerAction;
   fieldGoalSuccess?: boolean;
+  /** Test mode: id of the scenario to deal next hand, or null to clear. */
+  testScenario?: string | null;
 }
 
 export interface ServerMessage {
