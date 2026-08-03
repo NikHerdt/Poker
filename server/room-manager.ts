@@ -71,6 +71,7 @@ export function createRoom(hostId: string, hostName: string, config?: Partial<Ro
     game: null,
     hostId,
     playerIdToName: { [hostId]: hostName },
+    seatOrder: [hostId],
     fieldGoalUsed: { [hostId]: false },
   };
 
@@ -83,17 +84,64 @@ export function createRoom(hostId: string, hostName: string, config?: Partial<Ro
   return state;
 }
 
+/**
+ * Join a room. Before the game starts everyone is seated straight away; once a
+ * game is running the joiner watches and waits for the host to approve them,
+ * and is only seated (at the end of the order, so the button is undisturbed)
+ * once approved.
+ */
 export function joinRoom(roomCode: string, playerId: string, playerName: string): RoomState | null {
   const room = rooms.get(roomCode.toUpperCase());
   if (!room) return null;
   if (room.playerIds.size >= MAX_PLAYERS) return null;
-  /* Allow join during game; joiner is a spectator until next hand (and only plays if position does not split dealer/SB/BB). */
 
   room.playerIds.add(playerId);
   room.state.playerIdToName[playerId] = playerName;
   if (!room.state.fieldGoalUsed) room.state.fieldGoalUsed = {};
   room.state.fieldGoalUsed[playerId] = false;
+
+  if (room.state.game === null) {
+    seatPlayer(room, playerId);
+  } else {
+    if (!room.state.joinRequests) room.state.joinRequests = {};
+    room.state.joinRequests[playerId] = 'pending';
+  }
   return room.state;
+}
+
+/** Give a player a seat at the end of the order, if they do not have one. */
+export function seatPlayer(room: Room, playerId: string): void {
+  if (!room.state.seatOrder.includes(playerId)) room.state.seatOrder.push(playerId);
+}
+
+/** Ids in seat order, keeping only those present in `ids`. */
+export function inSeatOrder(state: RoomState, ids: Iterable<string>): string[] {
+  const wanted = new Set(ids);
+  const ordered = state.seatOrder.filter((id) => wanted.has(id));
+  // Anything without a seat yet (shouldn't happen) goes on the end, in order.
+  for (const id of wanted) {
+    if (!ordered.includes(id)) ordered.push(id);
+  }
+  return ordered;
+}
+
+/**
+ * The next player to take the button: one seat on from whoever had it last,
+ * skipping seats that are not in this hand. Seat-based, so a player leaving,
+ * rebuying or joining never rewinds or jumps the blinds.
+ */
+export function nextDealerId(state: RoomState, activeIds: string[]): string {
+  const active = new Set(activeIds);
+  const seats = state.seatOrder;
+  const previous = state.lastDealerId;
+  if (previous && seats.includes(previous)) {
+    const start = seats.indexOf(previous);
+    for (let step = 1; step <= seats.length; step++) {
+      const candidate = seats[(start + step) % seats.length];
+      if (active.has(candidate)) return candidate;
+    }
+  }
+  return seats.find((id) => active.has(id)) ?? activeIds[0];
 }
 
 export function getRoom(roomCode: string): Room | null {
@@ -130,6 +178,22 @@ export function leaveRoom(roomCode: string, playerId: string): RoomState | null 
   room.playerIds.delete(playerId);
   room.sockets.delete(playerId);
   delete room.state.playerIdToName[playerId];
+  // If the button was on the player leaving, hand it back a seat so the next
+  // hand still moves it forward by one rather than jumping to the top.
+  const seatIndex = room.state.seatOrder.indexOf(playerId);
+  if (seatIndex >= 0 && room.state.lastDealerId === playerId) {
+    const previousSeat = room.state.seatOrder.length > 1
+      ? room.state.seatOrder[(seatIndex - 1 + room.state.seatOrder.length) % room.state.seatOrder.length]
+      : undefined;
+    room.state.lastDealerId = previousSeat === playerId ? undefined : previousSeat;
+  }
+  room.state.seatOrder = room.state.seatOrder.filter((id) => id !== playerId);
+  if (room.state.joinRequests) delete room.state.joinRequests[playerId];
+  // Someone who has left is never going to answer their rebuy prompt, and the
+  // host cannot deal the next hand until every prompt is answered.
+  if (room.state.rebuyDecisions) delete room.state.rebuyDecisions[playerId];
+  if (room.state.rebuyRequested) delete room.state.rebuyRequested[playerId];
+  if (room.state.ploVote) delete room.state.ploVote.votes[playerId];
   if (room.state.game) {
     const p = room.state.game.players.find((x) => x.id === playerId);
     if (p) p.connected = false;

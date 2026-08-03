@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { WebSocketServer } from 'ws';
-import type { ClientMessage, PlayerAction } from './shared/types';
+import type { ClientMessage, PlayerAction, RoomState } from './shared/types';
 import {
   getRoom,
   createRoom,
@@ -11,6 +11,9 @@ import {
   leaveRoom,
   canStartGame,
   ensureRebuyStateWhenFinished,
+  inSeatOrder,
+  nextDealerId,
+  seatPlayer,
   type Room,
 } from './room-manager';
 import { MIN_PLAYERS } from './shared/constants';
@@ -23,6 +26,7 @@ import {
   canFieldGoal,
   reverseLastRaise,
   advanceIfBettingRoundComplete,
+  removePlayerFromHand,
 } from './game-engine';
 
 const PORT = Number(process.env.PORT) || 3001;
@@ -54,12 +58,59 @@ function ensureRoomStateBeforeSend(room: Room | null): void {
   if (room.state.tournament) room.state.tournament.serverNowMs = Date.now();
 }
 
-function broadcast(roomCode: string, message: object): void {
+/**
+ * The room as one player may see it: you always get your own hole cards, and
+ * everyone else's only once they choose to show them. Hidden hands are sent as
+ * a count so the table can still lay out the right number of card backs.
+ */
+function stateFor(state: RoomState, viewerId: string | null): RoomState {
+  if (!state.game) return state;
+  const revealed = new Set(state.game.revealedPlayerIds ?? []);
+  return {
+    ...state,
+    game: {
+      ...state.game,
+      // The deck would otherwise tell anyone watching what is coming next.
+      deck: [],
+      players: state.game.players.map((p) =>
+        p.id === viewerId || revealed.has(p.id)
+          ? p
+          : { ...p, holeCards: [], holeCardCount: p.holeCardCount ?? p.holeCards.length }
+      ),
+    },
+  };
+}
+
+function broadcast(roomCode: string, message: { type: string; state?: RoomState }): void {
   const sockets = getSockets(roomCode);
-  const payload = JSON.stringify(message);
-  for (const ws of sockets.values()) {
-    if (ws.readyState === 1) ws.send(payload);
+  for (const [playerId, ws] of sockets.entries()) {
+    if (ws.readyState !== 1) continue;
+    const payload = message.state
+      ? { ...message, state: stateFor(message.state, playerId) }
+      : message;
+    ws.send(JSON.stringify(payload));
   }
+}
+
+/**
+ * A player left, or their connection dropped. There is no way back into the
+ * same seat, so treat both the same: fold them out of the hand in progress and
+ * free their seat, and let everyone still at the table carry on.
+ */
+function handleDeparture(roomCode: string, playerId: string): void {
+  const room = getRoom(roomCode);
+  if (!room) return;
+  const game = room.state.game;
+  if (game && game.phase !== 'finished' && game.phase !== 'showdown') {
+    removePlayerFromHand(game, playerId);
+  }
+  leaveRoom(roomCode, playerId);
+  removeSocket(roomCode, playerId);
+
+  const remaining = getRoom(roomCode);
+  if (!remaining) return; // room emptied out and was cleaned up
+  ensureRoomStateBeforeSend(remaining);
+  broadcast(roomCode, { type: 'room_state', state: remaining.state });
 }
 
 wss.on('connection', (ws) => {
@@ -103,7 +154,7 @@ wss.on('connection', (ws) => {
         addSocket(roomCode, playerId, ws);
         ensureRoomStateBeforeSend(room);
         broadcast(roomCode, { type: 'room_state', state: room.state });
-        ws.send(JSON.stringify({ type: 'room_joined', roomCode, playerId, state: room.state }));
+        ws.send(JSON.stringify({ type: 'room_joined', roomCode, playerId, state: stateFor(room.state, playerId) }));
         return;
       }
 
@@ -140,7 +191,7 @@ wss.on('connection', (ws) => {
         const handNumber = isFinished && room.state.game ? room.state.game.handNumber + 1 : 1;
 
         if (isNewGame) {
-          activePlayerIds = [...room.playerIds];
+          activePlayerIds = inSeatOrder(room.state, room.playerIds);
         } else {
           ensureRebuyStateWhenFinished(currentRoomCode);
           const prevGame = room.state.game!;
@@ -148,16 +199,26 @@ wss.on('connection', (ws) => {
           const requested = room.state.rebuyRequested ?? {};
           const buyInCounts = room.state.playerIdToBuyInCount ?? {};
 
-          const withChips = prevGame.players.filter((p) => p.chips > 0).map((p) => p.id);
-          const zeroRebuyYes = prevGame.players.filter((p) => p.chips <= 0 && rebuy[p.id] === 'yes').map((p) => p.id);
-          const spectatorRebuy = [...room.playerIds].filter(
-            (id) => !prevGame.players.some((p) => p.id === id) && requested[id]
-          );
-          const newJoiners = [...room.playerIds].filter(
-            (id) => !prevGame.players.some((p) => p.id === id) && !spectatorRebuy.includes(id)
-          );
+          // Players who have left keep their seat in the finished hand for the
+          // record, but they are not dealt into the next one.
+          const stillHere = (id: string) => room.playerIds.has(id);
+          const withChips = prevGame.players.filter((p) => p.chips > 0 && stillHere(p.id)).map((p) => p.id);
+          const zeroRebuyYes = prevGame.players
+            .filter((p) => p.chips <= 0 && rebuy[p.id] === 'yes' && stillHere(p.id))
+            .map((p) => p.id);
+          // Anyone seated but not in the last hand: spectators who asked to
+          // rebuy, and approved joiners who have never bought in. Players who
+          // sat out stay out until they ask back in.
+          const returning = room.state.seatOrder.filter((id) => {
+            if (!room.playerIds.has(id)) return false;
+            if (prevGame.players.some((p) => p.id === id)) return false;
+            if (room.state.joinRequests?.[id] !== undefined) return false;
+            const neverBoughtIn = buyInCounts[id] === undefined;
+            return requested[id] === true || neverBoughtIn;
+          });
 
-          activePlayerIds = [...withChips, ...zeroRebuyYes, ...spectatorRebuy];
+          // Seat order decides who sits where — never the order they rebought in.
+          activePlayerIds = inSeatOrder(room.state, [...withChips, ...zeroRebuyYes, ...returning]);
 
           previousChips = {};
           previousBuyInCounts = {};
@@ -171,21 +232,9 @@ wss.on('connection', (ws) => {
             const p = prevGame.players.find((x) => x.id === id)!;
             previousBuyInCounts[id] = (p.buyInCount ?? 1) + 1;
           }
-          for (const id of spectatorRebuy) {
+          for (const id of returning) {
             previousChips[id] = buyIn;
             previousBuyInCounts[id] = (buyInCounts[id] ?? 0) + 1;
-          }
-
-          for (const id of newJoiners) {
-            const n = activePlayerIds.length + 1;
-            const newPlayerIndex = n - 1;
-            const dealerIdx = (handNumber - 1) % n;
-            const sbIdx = (dealerIdx + 1) % n;
-            const bbIdx = (dealerIdx + 2) % n;
-            if (newPlayerIndex === dealerIdx || newPlayerIndex === sbIdx || newPlayerIndex === bbIdx) continue;
-            activePlayerIds.push(id);
-            previousChips[id] = buyIn;
-            previousBuyInCounts[id] = buyInCounts[id] ?? 1;
           }
 
           if (activePlayerIds.length < MIN_PLAYERS) {
@@ -208,10 +257,10 @@ wss.on('connection', (ws) => {
           delete room.state.ploVoteConcluded;
         }
 
-        const nextDealerIndex = (handNumber - 1) % activePlayerIds.length;
-        const nextDealerId = activePlayerIds[nextDealerIndex];
+        const dealerId = nextDealerId(room.state, activePlayerIds);
+        const dealerIndex = Math.max(0, activePlayerIds.indexOf(dealerId));
         let isPlo = Boolean(room.state.ploRoundDealerId);
-        if (room.state.ploRoundDealerId && nextDealerId === room.state.ploRoundDealerId) {
+        if (room.state.ploRoundDealerId && dealerId === room.state.ploRoundDealerId) {
           if (room.state.ploRoundAnchorHasBeenDealer) {
             delete room.state.ploRoundDealerId;
             delete room.state.ploRoundAnchorHasBeenDealer;
@@ -245,6 +294,7 @@ wss.on('connection', (ws) => {
           previousChips,
           previousBuyInCounts,
           isPlo,
+          dealerIndex,
           smallBlind: tournament.smallBlind,
           bigBlind: tournament.bigBlind,
           blindLevel: tournament.level,
@@ -252,6 +302,7 @@ wss.on('connection', (ws) => {
           testScenario: scenario?.id,
         });
         room.state.pendingTestScenario = undefined;
+        room.state.lastDealerId = dealerId;
         room.state.game = game;
         if (!room.state.playerIdToBuyInCount) room.state.playerIdToBuyInCount = {};
         for (const p of game.players) {
@@ -399,6 +450,51 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      if (msg.type === 'approve_join' || msg.type === 'deny_join') {
+        if (!currentRoomCode || !currentPlayerId) return;
+        const room = getRoom(currentRoomCode);
+        if (!room) return;
+        if (room.state.hostId !== currentPlayerId) {
+          ws.send(JSON.stringify({ type: 'error', error: 'Only the host can admit players' }));
+          return;
+        }
+        const target = msg.targetPlayerId;
+        if (!target || room.state.joinRequests?.[target] !== 'pending') {
+          ws.send(JSON.stringify({ type: 'error', error: 'No such join request' }));
+          return;
+        }
+        if (msg.type === 'approve_join') {
+          // Seated at the end of the order, so the button and the blinds carry
+          // on exactly as they were. They are dealt in on the next hand.
+          seatPlayer(room, target);
+          delete room.state.joinRequests[target];
+        } else {
+          room.state.joinRequests[target] = 'denied';
+        }
+        ensureRoomStateBeforeSend(room);
+        broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+        return;
+      }
+
+      if (msg.type === 'show_cards') {
+        if (!currentRoomCode || !currentPlayerId) return;
+        const room = getRoom(currentRoomCode);
+        const game = room?.state.game;
+        if (!room || !game) return;
+        if (game.phase !== 'finished' && game.phase !== 'showdown') {
+          ws.send(JSON.stringify({ type: 'error', error: 'You can only show your cards once the hand is over' }));
+          return;
+        }
+        if (!game.players.some((p) => p.id === currentPlayerId)) return;
+        if (!game.revealedPlayerIds) game.revealedPlayerIds = [];
+        if (!game.revealedPlayerIds.includes(currentPlayerId)) {
+          game.revealedPlayerIds.push(currentPlayerId);
+        }
+        ensureRoomStateBeforeSend(room);
+        broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+        return;
+      }
+
       if (msg.type === 'set_test_scenario') {
         if (!currentRoomCode || !currentPlayerId) return;
         const room = getRoom(currentRoomCode);
@@ -424,13 +520,7 @@ wss.on('connection', (ws) => {
 
       if (msg.type === 'leave_room') {
         if (currentRoomCode && currentPlayerId) {
-          leaveRoom(currentRoomCode, currentPlayerId);
-          removeSocket(currentRoomCode, currentPlayerId);
-          const room = getRoom(currentRoomCode);
-          if (room) {
-            ensureRoomStateBeforeSend(room);
-            broadcast(currentRoomCode, { type: 'room_state', state: room.state });
-          }
+          handleDeparture(currentRoomCode, currentPlayerId);
           currentRoomCode = null;
           currentPlayerId = null;
         }
@@ -443,12 +533,7 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     if (currentRoomCode && currentPlayerId) {
-      removeSocket(currentRoomCode, currentPlayerId);
-      const room = getRoom(currentRoomCode);
-      if (room) {
-        ensureRoomStateBeforeSend(room);
-        broadcast(currentRoomCode, { type: 'room_state', state: room.state });
-      }
+      handleDeparture(currentRoomCode, currentPlayerId);
     }
   });
 });

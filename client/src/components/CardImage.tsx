@@ -16,35 +16,25 @@ function cardImageUrl(card: Card): string {
 const CARD_BACK_URL = `${CARD_BASE}/back.png`;
 
 interface CardImageProps {
-  card: Card;
+  /** Omit for a face-down card in a hand nobody has shown. */
+  card?: Card;
   faceDown?: boolean;
-  size?: 'small' | 'medium' | 'large' | 'hand';
+  size?: 'community' | 'hand' | 'mine';
 }
 
-const SIZES = {
-  small: { w: 48, h: 67 },
-  medium: { w: 72, h: 100 },
-  large: { w: 96, h: 134 },
-  hand: { w: 100, h: 140 },
-};
-
-export function CardImage({ card, faceDown = false, size = 'medium' }: CardImageProps) {
-  const { w, h } = SIZES[size === 'hand' ? 'hand' : size];
-  const src = faceDown ? CARD_BACK_URL : cardImageUrl(card);
+/**
+ * Card sizes are set in CSS (see Table.css) rather than in pixels here, so the
+ * whole table can shrink to fit a phone screen without scrolling.
+ */
+export function CardImage({ card, faceDown = false, size = 'hand' }: CardImageProps) {
+  const hidden = faceDown || !card;
+  const src = hidden ? CARD_BACK_URL : cardImageUrl(card);
   return (
     <img
       src={src}
-      alt={faceDown ? 'Card back' : `${card.rank} of ${card.suit}`}
-      width={w}
-      height={h}
-      className={`card-image card-size-${size}`}
-      style={{
-        width: w,
-        height: h,
-        objectFit: 'contain',
-        borderRadius: 6,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
-      }}
+      alt={hidden ? 'Face-down card' : `${card!.rank} of ${card!.suit}`}
+      className={`card-image card-${size}`}
+      draggable={false}
     />
   );
 }

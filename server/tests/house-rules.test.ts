@@ -72,16 +72,48 @@ describe('7-2 house rule', () => {
     assert.equal(totalChips(state), 3 * TEST_CONFIG.buyIn);
   });
 
-  it('is not awarded when 7-2 makes a made hand rather than winning as high card', () => {
+  it('is awarded however the 7-2 wins, made hand or not', () => {
     const state = startTestHand(2, {
       rig: {
         holeCards: { 0: ['7c', '2d'], 1: ['3d', '4c'] },
-        board: ['7s', 'Kd', 'Qc', '9h', '5s'],
+        board: ['7s', 'Kd', 'Qc', '9h', '5s'], // a pair of sevens, not 7-high
       },
     });
     playPassivelyToEnd(state);
 
     assert.deepEqual(state.winnerIds, ['a']);
+    assert.deepEqual(state.houseRuleBonuses, [
+      { playerId: 'a', type: '72', amount: TEST_CONFIG.bigBlind },
+    ]);
+    assert.equal(totalChips(state), 2 * TEST_CONFIG.buyIn);
+  });
+
+  it('pays the blinds in play now, not the blinds the room started with', () => {
+    // Level 3 of a doubling structure: blinds are 20/40, not the 5/10 the room
+    // was created with.
+    const state = startTestHand(2, {
+      rig: getTestScenario('seven_deuce')!.deal,
+      smallBlind: 20,
+      bigBlind: 40,
+      blindLevel: 3,
+    });
+    playPassivelyToEnd(state);
+
+    assert.deepEqual(state.winnerIds, ['a']);
+    assert.deepEqual(state.houseRuleBonuses, [{ playerId: 'a', type: '72', amount: 40 }]);
+    assert.equal(totalChips(state), 2 * TEST_CONFIG.buyIn);
+  });
+
+  it('is not awarded to a 7-2 that loses the pot', () => {
+    const state = startTestHand(2, {
+      rig: {
+        holeCards: { 0: ['7c', '2d'], 1: ['Ad', 'Kc'] },
+        board: ['As', 'Kd', 'Qc', '9h', '5s'],
+      },
+    });
+    playPassivelyToEnd(state);
+
+    assert.deepEqual(state.winnerIds, ['b']);
     assert.equal(state.houseRuleBonuses, undefined);
   });
 
@@ -130,6 +162,26 @@ describe('7-2 house rule', () => {
 });
 
 describe('6-9 house rule', () => {
+  it('pays the small blind in play at the current level', () => {
+    const state = startTestHand(2, {
+      rig: getTestScenario('six_nine')!.deal,
+      smallBlind: 20,
+      bigBlind: 40,
+      blindLevel: 3,
+    });
+    playPassivelyToEnd(state);
+
+    assert.deepEqual(state.winnerIds, ['a']);
+    assert.deepEqual(state.houseRuleBonuses, [{ playerId: 'a', type: '69', amount: 20 }]);
+  });
+
+  it('doubles along with the blinds in a PLO hand', () => {
+    // PLO posts double blinds, and the bonus follows the blinds actually posted.
+    const state = startTestHand(3, { isPlo: true, smallBlind: 20, bigBlind: 40 });
+    assert.equal(state.smallBlind, 40);
+    assert.equal(state.bigBlind, 80);
+  });
+
   it('pays the winner a small blind from every other player in the hand', () => {
     const state = startTestHand(2, { rig: getTestScenario('six_nine')!.deal });
     playPassivelyToEnd(state);

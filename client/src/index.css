@@ -97,6 +97,11 @@ input[type="number"] {
   padding: 1.25rem;
 }
 
+/* The table sizes itself to the viewport, so it supplies its own padding. */
+.app-shell-table {
+  padding: 0;
+}
+
 .app-alert {
   padding: 0.85rem 1.1rem;
   margin-bottom: 1rem;

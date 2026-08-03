@@ -62,13 +62,50 @@ Then open the URL Vite prints (usually `http://localhost:5173`). The client conn
 
 - Create or join rooms by code; host starts the game
 - Texas Hold'em with configurable blinds and buy-in
+- Round table view that fits a phone screen: every seat, bet and card visible at once
 - Optional tournament blind levels: raise blinds every N hands or every N minutes
+- Standard betting minimums, with a stepper and pot-fraction shortcuts
 - Side pots and all-in handling
-- Rebuy when you're out of chips; spectators can request to join
+- Rebuy when you're out of chips; players can join mid-game with host approval
+- Showing your hand at the end is optional — nothing is revealed automatically
 - Optional Pot Limit Omaha (PLO) via in-game vote
 - House rules: 7-2 and 6-9 bonuses, three pair beats two pair
 - Field goal minigame (optional raise reversal), playable by tap or space bar
 - Test mode for dealing rigged hands that exercise the house rules
+
+## At the table
+
+Seats are arranged around the table with you at the bottom, so the layout reads
+the same for everyone. Chips each player has bet this round sit on the felt in
+front of them and slide in as they bet; the pot in the middle is everything
+committed to the hand. The seat shows the player's last action — check, call,
+**bet**, **raise** or all-in — and the winner gets a badge when the hand ends.
+
+**Betting** follows normal table rules. With no bet in front of you the choice
+is check or **bet** (minimum one big blind); facing a bet it is call or
+**raise** (minimum: the size of the last bet or raise, on top of it). Both
+minimums reset each street, and you can always shove for less. The amount has a
+slider, − / + buttons that step by a big blind, and Min / ½ pot / Pot / All-in
+shortcuts.
+
+**Showing cards** is opt-in. Hole cards are never sent to other players'
+browsers — not just hidden in the UI — so the only way anyone sees your hand is
+if you press *Show my cards* after the hand.
+
+## Seats, joining and leaving
+
+Players keep a fixed seat for the life of the room, and the button moves one
+seat per hand. Because the button follows seats rather than a player count,
+rebuying, sitting out, joining and leaving never reshuffle the table or make the
+blinds skip or repeat.
+
+- **Joining a game in progress** puts you in as a spectator with a request to
+  the host, who gets Admit / Decline buttons. Admitted players take the last
+  seat and are dealt in on the next hand.
+- **Leaving**, or dropping the connection, folds that player out of the hand in
+  progress and frees their seat, so everyone else carries on straight away. If
+  that leaves one player, they take the pot.
+- **Rebuying** keeps your original seat.
 
 ## Blind levels (tournament style)
 
@@ -87,16 +124,16 @@ level arrives. PLO hands still double the level's blinds, as before.
 
 | Rule | Effect |
 |------|--------|
-| 7-2  | Winning the pot holding 7-2 collects one big blind from every other player dealt into the hand |
+| 7-2  | Win the pot holding 7-2 and collect one big blind from every other player dealt into the hand |
 | 6-9  | Same, but one small blind |
 | Three pair | With an identical two pair, the hand whose seven cards contain a third pair wins |
 | Field goal | Once per player per room, a kick minigame that reverses the last raise if it is good |
 
-Bonuses are paid by everyone else dealt into the hand — folding early does not
-get you out of it — and are capped at what a player actually has, so the
-table's chip total never changes. Winning by making everyone fold pays the
-bonus too. At a showdown the 7-2 (or 6-9) has to be the hand that actually won,
-as high card: flopping trips with 7-2 wins the pot but not the bonus.
+Winning the pot is the only condition: it pays at a showdown, it pays when you
+bluff everyone out, and it pays whether the 7-2 stayed 7-high or turned into a
+full house. Everyone else dealt into the hand pays — folding early does not get
+you out of it — capped at what a player actually has, so the table's chip total
+never changes. A 7-2 that loses pays nothing.
 
 The field goal can only reverse a raise inside the betting round it was made
 in. Once everyone has called and the next card is dealt, the raise is part of

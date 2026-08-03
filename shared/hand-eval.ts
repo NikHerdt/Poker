@@ -204,8 +204,10 @@ export function evaluateHand(holeCards: Card[], communityCards: Card[]): HandRes
 
   if (!best) throw new Error('No hand evaluated');
 
-  best.is72 = holdsSevenDeuce(holeCards) && best.rank === 'high_card';
-  best.is69 = holdsSixNine(holeCards) && best.rank === 'high_card';
+  // The bonus is about holding the cards, not about what they made: winning
+  // with 7-2 pays whether it is 7-high or a full house.
+  best.is72 = holdsSevenDeuce(holeCards);
+  best.is69 = holdsSixNine(holeCards);
 
   return best;
 }
@@ -239,8 +241,10 @@ export function evaluateHandOmaha(holeCards: Card[], communityCards: Card[]): Ha
 
   if (!best) throw new Error('No hand evaluated');
 
-  best.is72 = holdsSevenDeuce(holeCards) && best.rank === 'high_card';
-  best.is69 = holdsSixNine(holeCards) && best.rank === 'high_card';
+  // The bonus is about holding the cards, not about what they made: winning
+  // with 7-2 pays whether it is 7-high or a full house.
+  best.is72 = holdsSevenDeuce(holeCards);
+  best.is69 = holdsSixNine(holeCards);
 
   return best;
 }

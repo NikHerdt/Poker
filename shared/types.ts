@@ -14,7 +14,9 @@ export interface HandResult {
   rankValue: number;
   tiebreak: number[]; // descending values for comparison
   cards: Card[];
+  /** Hole cards hold a 7 and a 2 — pays the house bonus if this hand wins. */
   is72?: boolean;
+  /** Hole cards hold a 6 and a 9 — pays the house bonus if this hand wins. */
   is69?: boolean;
   pairCountIn7?: number; // number of distinct pairs in 7 cards (for three-pair rule)
 }
@@ -48,10 +50,17 @@ export interface Player {
   isBigBlind: boolean;
   connected: boolean;
   lastAction?: PlayerActionType;
+  /** What to show in the UI: distinguishes a bet from a raise, an all-in from a call. */
+  lastActionLabel?: 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'all-in';
   allIn: boolean;
   hasActedThisRound?: boolean;
   /** Number of buy-ins this player has taken (1 = initial buy-in). */
   buyInCount?: number;
+  /**
+   * How many hole cards this player holds. `holeCards` is empty for everyone
+   * but you until they choose to show, so the UI counts backs with this.
+   */
+  holeCardCount?: number;
 }
 
 export interface Pot {
@@ -135,7 +144,11 @@ export interface GameState {
   blindLevel?: number;
   /** Set when the hand was dealt by test mode with a rigged deck. */
   testScenario?: string;
+  /** Players who chose to show their hand after it ended. Nothing is shown automatically. */
+  revealedPlayerIds?: string[];
 }
+
+export type JoinRequestStatus = 'pending' | 'denied';
 
 export interface RoomState {
   roomCode: string;
@@ -143,6 +156,17 @@ export interface RoomState {
   game: GameState | null;
   hostId: string;
   playerIdToName: Record<string, string>;
+  /**
+   * Seating order. Fixed for the life of the room: players keep their seat
+   * across hands, rebuys and sit-outs, and joiners are seated at the end. The
+   * button walks this list, so the blind order never jumps when the table size
+   * changes.
+   */
+  seatOrder: string[];
+  /** Who had the button on the last hand dealt; the next hand moves it one seat on. */
+  lastDealerId?: string;
+  /** Players who asked to join a running game and are waiting on the host. */
+  joinRequests?: Record<string, JoinRequestStatus>;
   fieldGoalUsed?: Record<string, boolean>;
   /** For players with 0 chips at end of hand: pending until they send rebuy_yes/rebuy_no. */
   rebuyDecisions?: Record<string, 'pending' | 'yes' | 'no'>;
@@ -178,7 +202,10 @@ export type ClientMessageType =
   | 'plo_vote_start'
   | 'plo_vote_yes'
   | 'plo_vote_no'
-  | 'set_test_scenario';
+  | 'set_test_scenario'
+  | 'approve_join'
+  | 'deny_join'
+  | 'show_cards';
 
 export type ServerMessageType =
   | 'room_created'
@@ -196,6 +223,8 @@ export interface ClientMessage {
   fieldGoalSuccess?: boolean;
   /** Test mode: id of the scenario to deal next hand, or null to clear. */
   testScenario?: string | null;
+  /** Host approving or denying a join request. */
+  targetPlayerId?: string;
 }
 
 export interface ServerMessage {

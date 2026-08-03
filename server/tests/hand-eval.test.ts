@@ -41,15 +41,17 @@ describe('hand ranking', () => {
 });
 
 describe('house rule flags', () => {
-  it('flags 7-2 only when the hole cards win as high card', () => {
+  it('flags 7-2 whenever the hole cards hold a seven and a deuce', () => {
     assert.equal(evaluateHand(cards('7c 2d'), cards('As Kd Qc 9h 5s')).is72, true);
-    assert.equal(evaluateHand(cards('7c 2d'), cards('7s Kd Qc 9h 5s')).is72, false);
+    assert.equal(evaluateHand(cards('7c 2d'), cards('7s Kd Qc 9h 5s')).is72, true, 'a made hand still counts');
+    assert.equal(evaluateHand(cards('7c 2d'), cards('7s 7h 2c 2h 5s')).is72, true, 'even a full house');
     assert.equal(evaluateHand(cards('7c 3d'), cards('As Kd Qc 9h 5s')).is72, false);
   });
 
-  it('flags 6-9 only when the hole cards win as high card', () => {
+  it('flags 6-9 whenever the hole cards hold a six and a nine', () => {
     assert.equal(evaluateHand(cards('6c 9d'), cards('As Kd Qc Jh 4d')).is69, true);
-    assert.equal(evaluateHand(cards('6c 9d'), cards('9s Kd Qc Jh 4d')).is69, false);
+    assert.equal(evaluateHand(cards('6c 9d'), cards('9s Kd Qc Jh 4d')).is69, true);
+    assert.equal(evaluateHand(cards('6c 8d'), cards('9s Kd Qc Jh 4d')).is69, false);
   });
 
   it('counts the pairs across all seven cards for the three-pair rule', () => {

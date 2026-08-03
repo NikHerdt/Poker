@@ -32,7 +32,11 @@ export function BlindLevelBadge({ state, game }: { state: RoomState; game: GameS
     return () => clearInterval(t);
   }, [nextLevelAtMs]);
 
-  const blinds = `${game.smallBlind} / ${game.bigBlind}`;
+  // A hand dealt before blind levels existed carries no blinds of its own, so
+  // fall back to the level's blinds and then the room config.
+  const smallBlind = game.smallBlind ?? tournament?.smallBlind ?? state.config.smallBlind;
+  const bigBlind = game.bigBlind ?? tournament?.bigBlind ?? state.config.bigBlind;
+  const blinds = `${smallBlind} / ${bigBlind}`;
 
   if (!structureActive || !tournament) {
     return <span className="blind-badge">Blinds {blinds}</span>;

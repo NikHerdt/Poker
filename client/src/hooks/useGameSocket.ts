@@ -35,6 +35,9 @@ export interface UseGameSocketResult {
   sendPloVoteYes: () => void;
   sendPloVoteNo: () => void;
   sendTestScenario: (scenarioId: string | null) => void;
+  approveJoin: (targetPlayerId: string) => void;
+  denyJoin: (targetPlayerId: string) => void;
+  sendShowCards: () => void;
 }
 
 export function useGameSocket(): UseGameSocketResult {
@@ -136,6 +139,24 @@ export function useGameSocket(): UseGameSocketResult {
     [send]
   );
 
+  const approveJoin = useCallback(
+    (targetPlayerId: string) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'approve_join', targetPlayerId });
+    },
+    [send]
+  );
+
+  const denyJoin = useCallback(
+    (targetPlayerId: string) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'deny_join', targetPlayerId });
+    },
+    [send]
+  );
+
+  const sendShowCards = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'show_cards' });
+  }, [send]);
+
   const clearError = useCallback(() => setError(null), []);
 
   useEffect(() => {
@@ -203,5 +224,8 @@ export function useGameSocket(): UseGameSocketResult {
     sendPloVoteYes,
     sendPloVoteNo,
     sendTestScenario,
+    approveJoin,
+    denyJoin,
+    sendShowCards,
   };
 }

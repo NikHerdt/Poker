@@ -6,8 +6,11 @@ export default function App() {
   const socket = useGameSocket();
   const { state, playerId, error, connected, clearError, leaveRoom } = socket;
 
+  // The table lays itself out to the full screen, so the shell drops its padding.
+  const atTable = connected && Boolean(state?.game);
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${atTable ? 'app-shell-table' : ''}`}>
       {error && (
         <div role="alert" className="app-alert">
           <span>{error}</span>

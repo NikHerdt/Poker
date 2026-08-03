@@ -10,7 +10,8 @@ export function startTestHand(
   seats: number,
   overrides: Partial<StartHandOptions> & { rig?: RiggedDeal; chips?: Record<string, number> } = {}
 ): GameState {
-  const playerIds = Array.from({ length: seats }, (_, i) => String.fromCharCode(97 + i));
+  const playerIds =
+    overrides.playerIds ?? Array.from({ length: seats }, (_, i) => String.fromCharCode(97 + i));
   const playerNames = Object.fromEntries(playerIds.map((id) => [id, id.toUpperCase()]));
   const { chips, ...rest } = overrides;
   return startHand({

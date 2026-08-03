@@ -110,6 +110,11 @@ export interface StartHandOptions {
   previousChips?: Record<string, number>;
   previousBuyInCounts?: Record<string, number>;
   isPlo?: boolean;
+  /**
+   * Seat that gets the button, as an index into `playerIds`. The caller walks
+   * the room's seat order so the button never jumps when players come or go.
+   */
+  dealerIndex?: number;
   /** Blinds for this hand once the blind level is applied; defaults to the config blinds. */
   smallBlind?: number;
   bigBlind?: number;
@@ -145,7 +150,10 @@ export function startHand(options: StartHandOptions): GameState {
   const holeCardCount = isPlo ? 4 : 2;
   let deck = shuffle(createDeck());
   if (rig) deck = stackDeck(deck, planFromRig(rig, playerIds.length, holeCardCount));
-  const dealerIndex = (handNumber - 1) % playerIds.length;
+  const dealerIndex =
+    options.dealerIndex != null && options.dealerIndex >= 0
+      ? options.dealerIndex % playerIds.length
+      : (handNumber - 1) % playerIds.length;
   const sbIndex = (dealerIndex + 1) % playerIds.length;
   const bbIndex = (dealerIndex + 2) % playerIds.length;
 
@@ -169,6 +177,7 @@ export function startHand(options: StartHandOptions): GameState {
       players[p].holeCards.push(card);
     }
   }
+  for (const p of players) p.holeCardCount = holeCardCount;
 
   if (isPlo) {
     for (const p of players) {
@@ -310,9 +319,14 @@ function collectBets(state: GameState): void {
     { amount: total, eligiblePlayerIds: state.players.filter((p) => !p.folded).map((p) => p.id) },
   ];
   state.currentBet = 0;
+  // Each street starts fresh: the smallest legal bet is one big blind again.
+  state.minRaise = state.bigBlind;
   // The round is closed: its raises have been matched and folded into the pot,
   // so there is nothing left for a field goal to reverse.
   state.lastAction = undefined;
+  state.players.forEach((p) => {
+    p.lastActionLabel = undefined;
+  });
 }
 
 function buildSidePots(state: GameState): Pot[] {
@@ -426,6 +440,15 @@ function firstPlayerWhoCanAct(state: GameState, fromIndex: number): number {
   return -1;
 }
 
+/** Most a player may put out in total this round: their stack, or the pot limit in PLO. */
+export function maxRaiseToFor(state: GameState, player: Player): number {
+  const stackMax = player.currentBet + player.chips;
+  if (!state.isPlo) return stackMax;
+  const collected = state.pots.reduce((s, pot) => s + pot.amount, 0);
+  const currentBets = state.players.reduce((s, p) => s + p.currentBet, 0);
+  return Math.min(player.currentBet + collected + currentBets, stackMax);
+}
+
 function bettingRoundComplete(state: GameState): boolean {
   const active = state.players.filter((p) => !p.folded && !p.allIn);
   if (active.length === 0) return true;
@@ -440,6 +463,58 @@ function bettingRoundComplete(state: GameState): boolean {
   return allMatched && roundComplete;
 }
 
+/**
+ * Fold a player and, if that leaves one player standing, award them the pot.
+ * Returns true when the hand ended here.
+ */
+function foldPlayer(state: GameState, player: Player): boolean {
+  player.folded = true;
+  player.lastAction = 'fold';
+  player.lastActionLabel = 'fold';
+  state.lastAction = { playerId: player.id, action: 'fold' };
+
+  const remaining = state.players.filter((p) => !p.folded);
+  if (remaining.length !== 1) return false;
+
+  const winner = remaining[0];
+  winner.chips += state.players.reduce((s, p) => s + p.totalBetThisHand, 0);
+  state.winnerIds = [winner.id];
+  // Winning without a showdown still pays the 7-2 / 6-9 bonus: there is no
+  // board to rank, so holding the cards is the whole rule.
+  applyHouseRuleBonuses(
+    state,
+    new Map([
+      [winner.id, { is72: holdsSevenDeuce(winner.holeCards), is69: holdsSixNine(winner.holeCards) }],
+    ])
+  );
+  state.phase = 'finished';
+  return true;
+}
+
+/**
+ * Someone left the table mid-hand. They forfeit the hand like a fold, and the
+ * action moves on so the players still there are not left waiting on a seat
+ * that is never going to act. Their seat stays in `players` until the hand is
+ * over so the acting index and side pots stay consistent.
+ */
+export function removePlayerFromHand(state: GameState, playerId: string): void {
+  if (state.phase === 'finished' || state.phase === 'showdown') return;
+  const idx = state.players.findIndex((p) => p.id === playerId);
+  if (idx < 0) return;
+  const player = state.players[idx];
+  player.connected = false;
+  if (player.folded) return;
+
+  player.hasActedThisRound = true;
+  if (foldPlayer(state, player)) return;
+
+  if (state.actingPlayerIndex === idx) {
+    const next = nextActingPlayerFrom(state, idx);
+    if (next >= 0) state.actingPlayerIndex = next;
+  }
+  advanceIfBettingRoundComplete(state);
+}
+
 export function applyAction(
   state: GameState,
   playerId: string,
@@ -452,52 +527,48 @@ export function applyAction(
   player.hasActedThisRound = true;
 
   if (action.type === 'fold') {
-    player.folded = true;
-    player.lastAction = 'fold';
-    state.lastAction = { playerId: player.id, action: 'fold' };
-    const remaining = state.players.filter((p) => !p.folded);
-    if (remaining.length === 1) {
-      const winner = remaining[0];
-      const totalPot = state.players.reduce((s, p) => s + p.totalBetThisHand, 0);
-      winner.chips += totalPot;
-      state.winnerIds = [winner.id];
-      // Winning without a showdown still pays the 7-2 / 6-9 bonus: there is no
-      // board to rank, so holding the cards is the whole rule.
-      applyHouseRuleBonuses(
-        state,
-        new Map([
-          [winner.id, { is72: holdsSevenDeuce(winner.holeCards), is69: holdsSixNine(winner.holeCards) }],
-        ])
-      );
-      state.phase = 'finished';
-      return;
-    }
+    if (foldPlayer(state, player)) return;
   } else if (action.type === 'check') {
     if (player.currentBet < state.currentBet) throw new Error('Cannot check');
     player.lastAction = 'check';
+    player.lastActionLabel = 'check';
     state.lastAction = { playerId: player.id, action: 'check' };
   } else if (action.type === 'call') {
     const toCall = state.currentBet - player.currentBet;
+    if (toCall <= 0) throw new Error('Nothing to call');
     const pay = Math.min(toCall, player.chips);
     player.chips -= pay;
     player.currentBet += pay;
     player.totalBetThisHand += pay;
     if (player.chips <= 0) player.allIn = true;
     player.lastAction = 'call';
+    player.lastActionLabel = player.allIn ? 'all-in' : 'call';
     state.lastAction = { playerId: player.id, action: 'call' };
   } else if (action.type === 'raise' || action.type === 'all_in') {
     const oldCurrentBet = state.currentBet;
-    const minRaiseTo = state.currentBet + state.minRaise;
-    let maxRaiseTo = player.currentBet + player.chips;
-    if (state.isPlo) {
-      const potTotal = state.pots.reduce((s, pot) => s + pot.amount, 0);
-      const currentBetsTotal = state.players.reduce((s, p) => s + p.currentBet, 0);
-      const potForLimit = potTotal + currentBetsTotal;
-      const potMaxRaiseTo = player.currentBet + potForLimit;
-      maxRaiseTo = Math.min(potMaxRaiseTo, player.currentBet + player.chips);
+    const isOpeningBet = oldCurrentBet === 0;
+    const maxRaiseTo = maxRaiseToFor(state, player);
+    // Opening bet: at least one big blind. Raise: at least the size of the last
+    // bet or raise on top of it. Either way you can always shove for less.
+    const minRaiseTo = Math.min(
+      isOpeningBet ? state.bigBlind : oldCurrentBet + state.minRaise,
+      maxRaiseTo
+    );
+    const raiseTo = action.amount ?? (action.type === 'all_in' ? maxRaiseTo : minRaiseTo);
+
+    if (raiseTo > maxRaiseTo) {
+      throw new Error(state.isPlo ? 'Raise exceeds the pot limit' : 'You do not have that many chips');
     }
-    const raiseTo = action.amount ?? Math.min(maxRaiseTo, action.type === 'all_in' ? maxRaiseTo : minRaiseTo);
-    if (raiseTo > maxRaiseTo) throw new Error('Raise exceeds pot limit');
+    const isAllIn = raiseTo >= player.currentBet + player.chips;
+    if (raiseTo < minRaiseTo && !isAllIn) {
+      throw new Error(
+        isOpeningBet
+          ? `Minimum bet is ${minRaiseTo}`
+          : `Minimum raise is to ${minRaiseTo}`
+      );
+    }
+    if (raiseTo <= oldCurrentBet) throw new Error('A raise has to beat the current bet');
+
     const toPay = Math.min(Math.max(raiseTo - player.currentBet, 0), player.chips);
     player.chips -= toPay;
     player.currentBet += toPay;
@@ -505,8 +576,11 @@ export function applyAction(
     if (player.chips <= 0) player.allIn = true;
     state.currentBet = Math.max(state.currentBet, player.currentBet);
     const raiseSize = state.currentBet - oldCurrentBet;
+    // An all-in for less than a full raise does not reopen the betting, so the
+    // minimum raise stays where it was.
     state.minRaise = Math.max(state.minRaise, raiseSize);
     player.lastAction = 'raise';
+    player.lastActionLabel = player.allIn ? 'all-in' : isOpeningBet ? 'bet' : 'raise';
     state.lastAction = { playerId: player.id, action: 'raise', amount: state.currentBet, previousBet: oldCurrentBet };
   }
 
@@ -638,6 +712,11 @@ export function canAct(state: GameState, playerId: string): boolean {
   return !p.folded && !p.allIn;
 }
 
+/**
+ * A field goal is only offered when there is a raise worth reversing: it has to
+ * be live in this betting round, made by someone else, and still unmatched by
+ * you — with chips left to be saved.
+ */
 export function canFieldGoal(state: GameState, playerId: string, fieldGoalUsed: Record<string, boolean> | undefined): boolean {
   if (state.phase !== 'preflop' && state.phase !== 'flop' && state.phase !== 'turn' && state.phase !== 'river') {
     return false;
@@ -646,7 +725,9 @@ export function canFieldGoal(state: GameState, playerId: string, fieldGoalUsed: 
   if (state.lastAction.playerId === playerId) return false;
   if (fieldGoalUsed?.[playerId]) return false;
   const player = state.players.find((p) => p.id === playerId);
-  if (!player || player.folded) return false;
+  if (!player || player.folded || player.allIn || player.chips <= 0) return false;
+  // Already matched the raise (or it was reversed): nothing to take back.
+  if (player.currentBet >= state.currentBet) return false;
   return true;
 }
 

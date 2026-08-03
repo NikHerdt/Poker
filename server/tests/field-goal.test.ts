@@ -60,6 +60,22 @@ describe('field goal eligibility', () => {
     assert.equal(canFieldGoal(state, 'b', {}), false);
   });
 
+  it('is only open to the player the raise is sitting on', () => {
+    // Once someone calls, the raise is no longer just the raiser's chips to
+    // take back, so it stops being reversible for everyone.
+    const state = handWithRaise();
+    applyAction(state, 'b', { type: 'call' });
+    assert.equal(canFieldGoal(state, 'b', {}), false, 'b already matched it');
+    assert.equal(canFieldGoal(state, 'c', {}), false, 'b has acted on it since');
+  });
+
+  it('is not available to a player who is already all-in', () => {
+    const state = startTestHand(3, { chips: { a: 200, b: 200, c: 10 } });
+    applyAction(state, 'a', { type: 'raise', amount: 30 });
+    assert.equal(playerById(state, 'c').allIn, true, 'c posted their last chips as the big blind');
+    assert.equal(canFieldGoal(state, 'c', {}), false);
+  });
+
   it('is not available to a folded player', () => {
     // Four seats: a is dealer, b small blind, c big blind, so d acts first.
     const state = startTestHand(4);
