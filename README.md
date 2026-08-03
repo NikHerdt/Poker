@@ -48,6 +48,12 @@ npm run client
 
 Then open the URL Vite prints (usually `http://localhost:5173`). The client connects to the server at `localhost:3001` by default.
 
+> **Restart the server after pulling changes.** `npm run server` does not watch
+> for edits, so a server started earlier keeps running old code — which shows up
+> as missing buttons, `NaN` bet amounts, blinds that never rise or "only host
+> can start next hand". The client detects this and shows a banner telling you
+> to restart. Use `npm run server:dev` while developing to reload automatically.
+
 **Scripts (from repo root)**
 
 | Command           | Description                |

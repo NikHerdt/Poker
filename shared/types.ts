@@ -239,4 +239,6 @@ export interface ServerMessage {
   playerId?: string;
   state?: RoomState;
   error?: string;
+  /** See PROTOCOL_VERSION. Absent means the server predates the check. */
+  protocolVersion?: number;
 }

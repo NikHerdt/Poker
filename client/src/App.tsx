@@ -4,13 +4,22 @@ import { Table } from './components/Table';
 
 export default function App() {
   const socket = useGameSocket();
-  const { state, playerId, error, connected, clearError, leaveRoom } = socket;
+  const { state, playerId, error, connected, staleServer, clearError, leaveRoom } = socket;
 
   // The table lays itself out to the full screen, so the shell drops its padding.
   const atTable = connected && Boolean(state?.game);
 
   return (
     <div className={`app-shell ${atTable ? 'app-shell-table' : ''}`}>
+      {staleServer && (
+        <div role="alert" className="app-alert app-alert-stale">
+          <span>
+            <b>The game server is running an older build than this page.</b> Betting amounts,
+            showing cards and blind levels will misbehave until it is restarted — stop it and run{' '}
+            <code>npm run server</code> again.
+          </span>
+        </div>
+      )}
       {error && (
         <div role="alert" className="app-alert">
           <span>{error}</span>

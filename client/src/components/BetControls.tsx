@@ -6,17 +6,24 @@ interface BetControlsProps {
   me: Player;
   /** Chips in the middle plus every live bet. */
   totalPot: number;
+  /** Room blind, used if the hand itself did not carry one. */
+  configBigBlind: number;
   onAction: (action: { type: 'fold' | 'check' | 'call' | 'raise'; amount?: number }) => void;
 }
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+/** Never let a missing or malformed number reach the buttons as NaN. */
+const positive = (value: unknown, fallback: number): number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
 
 /**
  * Betting controls that follow normal table rules: check or call, and open for
  * at least a big blind or raise by at least the size of the last raise. You can
  * always shove for less than that.
  */
-export function BetControls({ game, me, totalPot, onAction }: BetControlsProps) {
+export function BetControls({ game, me, totalPot, configBigBlind, onAction }: BetControlsProps) {
+  const bigBlind = positive(game.bigBlind, positive(configBigBlind, 2));
+  const minRaiseStep = positive(game.minRaise, bigBlind);
   const toCall = Math.max(0, game.currentBet - me.currentBet);
   const isOpeningBet = game.currentBet === 0;
 
@@ -27,7 +34,7 @@ export function BetControls({ game, me, totalPot, onAction }: BetControlsProps) 
   const maxTo = game.isPlo
     ? Math.min(me.currentBet + collectedPot + liveBets, stackMax)
     : stackMax;
-  const minTo = Math.min(isOpeningBet ? game.bigBlind : game.currentBet + game.minRaise, maxTo);
+  const minTo = Math.min(isOpeningBet ? bigBlind : game.currentBet + minRaiseStep, maxTo);
 
   const someoneCanCall = game.players.some(
     (p) => p.id !== me.id && !p.folded && !p.allIn && p.chips > 0
@@ -41,7 +48,7 @@ export function BetControls({ game, me, totalPot, onAction }: BetControlsProps) 
 
   const value = clamp(amount, minTo, maxTo);
   const isAllIn = value >= stackMax;
-  const step = Math.max(1, game.bigBlind);
+  const step = Math.max(1, bigBlind);
   /**
    * A pot-sized raise is: call first, then raise by the pot that call creates.
    * `game.currentBet` already includes your call, so the raise on top is the

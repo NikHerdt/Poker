@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RoomState, RoomConfig, ClientMessage, ServerMessage } from 'shared/types';
+import { PROTOCOL_VERSION } from 'shared/constants';
 
 export type CreateRoomConfig = Partial<RoomConfig>;
 
@@ -21,6 +22,8 @@ export interface UseGameSocketResult {
   roomCode: string | null;
   error: string | null;
   connected: boolean;
+  /** True when the server is running a different build than this client. */
+  staleServer: boolean;
   createRoom: (playerName: string, config?: CreateRoomConfig) => void;
   joinRoom: (roomCode: string, playerName: string) => void;
   startGame: () => void;
@@ -46,6 +49,7 @@ export function useGameSocket(): UseGameSocketResult {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
+  const [staleServer, setStaleServer] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   const send = useCallback((msg: ClientMessage) => {
@@ -175,6 +179,12 @@ export function useGameSocket(): UseGameSocketResult {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data as string) as ServerMessage & { state?: RoomState; playerId?: string; roomCode?: string };
+        // A server built before this client will not stamp a matching version.
+        // Flag it rather than letting the mismatch show up as missing buttons
+        // and NaN amounts.
+        if (data.type !== 'error') {
+          setStaleServer(data.protocolVersion !== PROTOCOL_VERSION);
+        }
         if (data.type === 'room_created' && data.state != null) {
           setState(data.state);
           setPlayerId(data.playerId ?? null);
@@ -210,6 +220,7 @@ export function useGameSocket(): UseGameSocketResult {
     roomCode,
     error,
     connected,
+    staleServer,
     createRoom,
     joinRoom,
     startGame,

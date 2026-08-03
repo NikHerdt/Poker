@@ -13,6 +13,13 @@ export const HAND_RANK_ORDER = [
   'straight_flush',
 ] as const;
 
+/**
+ * Bumped whenever the client needs a server that understands newer messages or
+ * state. The server stamps it on everything it sends; a client that sees a
+ * different (or missing) version says so instead of misbehaving quietly.
+ */
+export const PROTOCOL_VERSION = 2;
+
 export const ROOM_CODE_LENGTH = 6;
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 12;

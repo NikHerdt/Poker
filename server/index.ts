@@ -16,7 +16,12 @@ import {
   seatPlayer,
   type Room,
 } from './room-manager';
-import { MIN_PLAYERS, MAX_PLO_PLAYERS, TURN_TIME_LIMIT_MS } from './shared/constants';
+import {
+  MIN_PLAYERS,
+  MAX_PLO_PLAYERS,
+  TURN_TIME_LIMIT_MS,
+  PROTOCOL_VERSION,
+} from './shared/constants';
 import { tournamentStateForHand } from './shared/blinds';
 import { getTestScenario } from './shared/test-scenarios';
 import {
@@ -128,7 +133,7 @@ function broadcast(roomCode: string, message: { type: string; state?: RoomState 
     const payload = message.state
       ? { ...message, state: stateFor(message.state, playerId) }
       : message;
-    ws.send(JSON.stringify(payload));
+    ws.send(JSON.stringify({ ...payload, protocolVersion: PROTOCOL_VERSION }));
   }
 }
 
@@ -167,7 +172,15 @@ wss.on('connection', (ws) => {
         currentRoomCode = state.roomCode;
         currentPlayerId = playerId;
         addSocket(state.roomCode, playerId, ws);
-        ws.send(JSON.stringify({ type: 'room_created', roomCode: state.roomCode, playerId, state }));
+        ws.send(
+          JSON.stringify({
+            type: 'room_created',
+            roomCode: state.roomCode,
+            playerId,
+            state,
+            protocolVersion: PROTOCOL_VERSION,
+          })
+        );
         return;
       }
 
@@ -194,7 +207,15 @@ wss.on('connection', (ws) => {
         addSocket(roomCode, playerId, ws);
         ensureRoomStateBeforeSend(room);
         broadcast(roomCode, { type: 'room_state', state: room.state });
-        ws.send(JSON.stringify({ type: 'room_joined', roomCode, playerId, state: stateFor(room.state, playerId) }));
+        ws.send(
+          JSON.stringify({
+            type: 'room_joined',
+            roomCode,
+            playerId,
+            state: stateFor(room.state, playerId),
+            protocolVersion: PROTOCOL_VERSION,
+          })
+        );
         return;
       }
 

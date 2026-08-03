@@ -102,6 +102,18 @@ input[type="number"] {
   padding: 0;
 }
 
+.app-alert-stale {
+  background: rgba(214, 158, 46, 0.18);
+  border: 1px solid rgba(214, 158, 46, 0.5);
+}
+
+.app-alert-stale code {
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 0.9em;
+}
+
 .app-alert {
   padding: 0.85rem 1.1rem;
   margin-bottom: 1rem;

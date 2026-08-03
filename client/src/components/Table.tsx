@@ -289,7 +289,13 @@ export function Table({ state, playerId, socket }: TableProps) {
               </div>
             </div>
             {isMyTurn && !me.folded && (
-              <BetControls game={game} me={me} totalPot={totalPot} onAction={socket.sendAction} />
+              <BetControls
+                game={game}
+                me={me}
+                totalPot={totalPot}
+                configBigBlind={state.config.bigBlind}
+                onAction={socket.sendAction}
+              />
             )}
           </>
         )}
