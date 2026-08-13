@@ -16,6 +16,7 @@ import {
   seatPlayer,
   markDisconnected,
   isDisconnected,
+  isCurrentSocket,
   reclaimSeat,
   dropExpiredSeats,
   tallyKickVote,
@@ -25,6 +26,7 @@ import {
   MIN_PLAYERS,
   MAX_PLO_PLAYERS,
   TURN_TIME_LIMIT_MS,
+  DISCONNECTED_TURN_LIMIT_MS,
   NEXT_HAND_DELAY_MS,
   PROTOCOL_VERSION,
 } from './shared/constants';
@@ -74,19 +76,24 @@ function updateTurnTimer(room: Room): void {
       ? game.players[game.actingPlayerIndex]
       : undefined;
   const actingId = acting && !acting.folded && !acting.allIn ? acting.id : undefined;
+  const away = actingId ? isDisconnected(room.state, actingId) : false;
+  // Re-arm when the player changes, and also when the one on the clock drops or
+  // comes back, since that changes how long they get.
+  const key = actingId ? `${actingId}:${away}` : undefined;
 
-  if (room.turnPlayerId === actingId) return;
+  if (room.turnPlayerId === key) return;
 
   if (room.turnTimer) clearTimeout(room.turnTimer);
   room.turnTimer = undefined;
-  room.turnPlayerId = actingId;
+  room.turnPlayerId = key;
 
   if (!actingId || !game) {
     if (game) delete game.actingDeadlineMs;
     return;
   }
 
-  game.actingDeadlineMs = Date.now() + TURN_TIME_LIMIT_MS;
+  const limit = away ? DISCONNECTED_TURN_LIMIT_MS : TURN_TIME_LIMIT_MS;
+  game.actingDeadlineMs = Date.now() + limit;
   const roomCode = room.state.roomCode;
   room.turnTimer = setTimeout(() => {
     const current = getRoom(roomCode);
@@ -95,7 +102,7 @@ function updateTurnTimer(room: Room): void {
     if (!action) return;
     ensureRoomStateBeforeSend(current);
     broadcast(roomCode, { type: 'room_state', state: current.state });
-  }, TURN_TIME_LIMIT_MS);
+  }, limit);
   // Do not hold the process open just for a countdown.
   room.turnTimer.unref?.();
 }
@@ -125,6 +132,9 @@ function stateFor(state: RoomState, viewerId: string | null): RoomState {
       ...state.game,
       // The deck would otherwise tell anyone watching what is coming next.
       deck: [],
+      // Whose cards this viewer may look at, which is not the same list for
+      // everyone once a peek has been allowed — the client draws faces from it.
+      revealedPlayerIds: [...revealed],
       players: state.game.players.map((p) =>
         p.id === viewerId || revealed.has(p.id)
           ? p
@@ -151,11 +161,22 @@ function broadcast(roomCode: string, message: { type: string; state?: RoomState 
  * holds the seat and chips for a while so they can come back to them, while
  * leaving on purpose gives the seat up.
  */
-function handleDeparture(roomCode: string, playerId: string, keepSeat: boolean): void {
+function handleDeparture(
+  roomCode: string,
+  playerId: string,
+  keepSeat: boolean,
+  ws?: import('ws').WebSocket
+): void {
   const room = getRoom(roomCode);
   if (!room) return;
+  // The player already reconnected on a newer socket, so this close is stale
+  // and must not take the seat away from the connection that replaced it.
+  if (!isCurrentSocket(roomCode, playerId, ws)) return;
   const game = room.state.game;
-  if (game && game.phase !== 'finished' && game.phase !== 'showdown') {
+  // Leaving forfeits the hand. A dropped connection does not: refreshing a page
+  // should not cost you the pot, so the hand is kept and the (much shorter)
+  // clock acts for them if they are not back in time.
+  if (!keepSeat && game && game.phase !== 'finished' && game.phase !== 'showdown') {
     removePlayerFromHand(game, playerId);
   }
 
@@ -785,7 +806,7 @@ wss.on('connection', (ws) => {
     // A dropped socket is treated as a connection problem, not a decision to
     // leave: the seat is held so they can come back to it.
     if (currentRoomCode && currentPlayerId) {
-      handleDeparture(currentRoomCode, currentPlayerId, true);
+      handleDeparture(currentRoomCode, currentPlayerId, true, ws);
     }
   });
 });

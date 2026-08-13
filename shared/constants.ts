@@ -38,6 +38,13 @@ export const MAX_PLO_PLAYERS = Math.floor((52 - BOARD_AND_BURN_CARDS) / 4);
  */
 export const TURN_TIME_LIMIT_MS = 60_000;
 
+/**
+ * A player whose connection dropped keeps their hand — refreshing a page should
+ * not forfeit it — but gets a much shorter clock, so the table is not left
+ * waiting on someone who may not be coming back.
+ */
+export const DISCONNECTED_TURN_LIMIT_MS = 12_000;
+
 /** Breathing room after a hand ends so everyone can read the result. */
 export const NEXT_HAND_DELAY_MS = 6_000;
 

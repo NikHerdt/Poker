@@ -364,12 +364,18 @@ function ResultPanel({
     const d = state.rebuyDecisions?.[id];
     return d === 'yes' || d === 'no';
   });
+  // Who the server would deal in: everyone from the last hand who still has
+  // chips, anyone rebuying, and seated players waiting to be dealt their first
+  // hand (a joiner the host let in, or a spectator who bought back).
+  const waitingToPlay = (state.seatOrder ?? []).filter((id: string) => {
+    if (!stillHere(id) || game.players.some((p: Player) => p.id === id)) return false;
+    if (state.joinRequests?.[id] !== undefined) return false;
+    return state.rebuyRequested?.[id] === true || state.playerIdToBuyInCount?.[id] === undefined;
+  }).length;
   const activeCount =
     game.players.filter((p: Player) => p.chips > 0 && stillHere(p.id)).length +
     zeroChipIds.filter((id: string) => state.rebuyDecisions?.[id] === 'yes').length +
-    Object.keys(state.rebuyRequested ?? {}).filter(
-      (id: string) => !game.players.some((p: Player) => p.id === id)
-    ).length;
+    waitingToPlay;
 
   return (
     <div className="result-panel">

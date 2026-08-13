@@ -232,72 +232,92 @@ export function useGameSocket(): UseGameSocketResult {
   const clearError = useCallback(() => setError(null), []);
 
   useEffect(() => {
-    const ws = new WebSocket(WS_URL);
-    wsRef.current = ws;
+    let disposed = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let attempt = 0;
 
-    ws.onopen = () => {
-      setConnected(true);
-      // If a seat is being held for us after a dropped connection, take it back.
-      const saved = loadSession();
-      if (saved) {
-        setRejoining(true);
-        ws.send(
-          JSON.stringify({ type: 'rejoin_room', roomCode: saved.roomCode, playerId: saved.playerId })
-        );
-      }
-    };
-    ws.onclose = () => {
-      setConnected(false);
-      setState(null);
-      setPlayerId(null);
-      setRoomCode(null);
-    };
-    ws.onerror = () => setError('Connection error');
+    /**
+     * Connect, and keep trying if the socket drops. Phones close sockets all
+     * the time — backgrounding the browser is enough — so a drop reconnects and
+     * takes the seat back rather than dumping the player into the lobby.
+     */
+    const connect = () => {
+      const ws = new WebSocket(WS_URL);
+      wsRef.current = ws;
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data as string) as ServerMessage & { state?: RoomState; playerId?: string; roomCode?: string };
-        // A server built before this client will not stamp a matching version.
-        // Flag it rather than letting the mismatch show up as missing buttons
-        // and NaN amounts.
-        if (data.type !== 'error') {
-          setStaleServer(data.protocolVersion !== PROTOCOL_VERSION);
+      ws.onopen = () => {
+        attempt = 0;
+        setConnected(true);
+        // If a seat is being held for us, take it back.
+        const saved = loadSession();
+        if (saved) {
+          setRejoining(true);
+          ws.send(
+            JSON.stringify({ type: 'rejoin_room', roomCode: saved.roomCode, playerId: saved.playerId })
+          );
         }
-        if (
-          (data.type === 'room_created' || data.type === 'room_joined') &&
-          data.state != null
-        ) {
-          setState(data.state);
-          setPlayerId(data.playerId ?? null);
-          setRoomCode(data.roomCode ?? null);
-          setError(null);
-          setRejoining(false);
-          // Remember the seat so a dropped connection can pick it back up.
-          if (data.roomCode && data.playerId) {
-            saveSession({ roomCode: data.roomCode, playerId: data.playerId });
+      };
+      ws.onclose = () => {
+        if (disposed) return;
+        setConnected(false);
+        // The table stays on screen while reconnecting, so a blip does not look
+        // like being thrown out of the game.
+        const delay = Math.min(5000, 400 * 2 ** attempt);
+        attempt += 1;
+        retryTimer = setTimeout(connect, delay);
+      };
+      ws.onerror = () => {
+        /* the close handler drives the retry */
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data as string) as ServerMessage & { state?: RoomState; playerId?: string; roomCode?: string };
+          // A server built before this client will not stamp a matching version.
+          // Flag it rather than letting the mismatch show up as missing buttons
+          // and NaN amounts.
+          if (data.type !== 'error') {
+            setStaleServer(data.protocolVersion !== PROTOCOL_VERSION);
           }
-        } else if (data.type === 'room_state' && data.state != null) {
-          setState(data.state);
-        } else if (data.type === 'game_started' && data.state != null) {
-          setState(data.state);
-          setError(null);
-        } else if (data.type === 'error' && data.error) {
-          // A seat that could not be reclaimed is not worth reporting: it just
-          // means the hold lapsed, so fall back to the normal lobby.
-          if (data.error.includes('no longer being held')) {
-            saveSession(null);
+          if (
+            (data.type === 'room_created' || data.type === 'room_joined') &&
+            data.state != null
+          ) {
+            setState(data.state);
+            setPlayerId(data.playerId ?? null);
+            setRoomCode(data.roomCode ?? null);
+            setError(null);
             setRejoining(false);
-          } else {
-            setError(data.error);
+            // Remember the seat so a dropped connection can pick it back up.
+            if (data.roomCode && data.playerId) {
+              saveSession({ roomCode: data.roomCode, playerId: data.playerId });
+            }
+          } else if (data.type === 'room_state' && data.state != null) {
+            setState(data.state);
+          } else if (data.type === 'game_started' && data.state != null) {
+            setState(data.state);
+            setError(null);
+          } else if (data.type === 'error' && data.error) {
+            // A seat that could not be reclaimed is not worth reporting: it just
+            // means the hold lapsed, so fall back to the normal lobby.
+            if (data.error.includes('no longer being held')) {
+              saveSession(null);
+              setRejoining(false);
+            } else {
+              setError(data.error);
+            }
           }
+        } catch {
+          setError('Invalid message');
         }
-      } catch {
-        setError('Invalid message');
-      }
+      };
     };
 
+    connect();
     return () => {
-      ws.close();
+      disposed = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      wsRef.current?.close();
       wsRef.current = null;
     };
   }, []);
