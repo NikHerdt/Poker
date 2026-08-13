@@ -472,6 +472,12 @@ function bettingRoundComplete(state: GameState): boolean {
   return allMatched && roundComplete;
 }
 
+/** Close out a hand, stamping when it ended so clients can pause on the result. */
+function finishHand(state: GameState): void {
+  state.phase = 'finished';
+  state.endedAtMs = Date.now();
+}
+
 /**
  * Fold a player and, if that leaves one player standing, award them the pot.
  * Returns true when the hand ended here.
@@ -496,7 +502,8 @@ function foldPlayer(state: GameState, player: Player): boolean {
       [winner.id, { is72: holdsSevenDeuce(winner.holeCards), is69: holdsSixNine(winner.holeCards) }],
     ])
   );
-  state.phase = 'finished';
+  state.wasShowdown = false;
+  finishHand(state);
   return true;
 }
 
@@ -722,13 +729,20 @@ function runShowdown(state: GameState): void {
   state.winnerIds = winnerIds;
   state.lastWinningHand = lastWinningHand;
 
-  // At a showdown the 7-2 / 6-9 hand has to be the one that actually won, as
-  // high card — see holdsSevenDeuce vs. HandResult.is72.
   applyHouseRuleBonuses(
     state,
     new Map(winnerIds.map((id) => [id, handResults.get(id)!]))
   );
-  state.phase = 'finished';
+
+  // Everyone who got to a showdown turns their hand over, as they would at a
+  // real table. Hands that end on a fold stay hidden unless shown by choice.
+  state.wasShowdown = inHand.length > 1;
+  if (state.wasShowdown) {
+    const revealed = new Set(state.revealedPlayerIds ?? []);
+    for (const p of inHand) revealed.add(p.id);
+    state.revealedPlayerIds = [...revealed];
+  }
+  finishHand(state);
 }
 
 export function canAct(state: GameState, playerId: string): boolean {

@@ -18,7 +18,7 @@ export const HAND_RANK_ORDER = [
  * state. The server stamps it on everything it sends; a client that sees a
  * different (or missing) version says so instead of misbehaving quietly.
  */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 export const ROOM_CODE_LENGTH = 6;
 export const MIN_PLAYERS = 2;
@@ -37,6 +37,15 @@ export const MAX_PLO_PLAYERS = Math.floor((52 - BOARD_AND_BURN_CARDS) / 4);
  * or a slow phone cannot hold the table up.
  */
 export const TURN_TIME_LIMIT_MS = 60_000;
+
+/** Breathing room after a hand ends so everyone can read the result. */
+export const NEXT_HAND_DELAY_MS = 6_000;
+
+/**
+ * How long a seat is held for someone whose connection dropped. They keep their
+ * chips and their place in the blind order, and sit out until they are back.
+ */
+export const RECONNECT_GRACE_MS = 5 * 60_000;
 
 export const DEFAULT_SMALL_BLIND = 5;
 export const DEFAULT_BIG_BLIND = 10;

@@ -21,6 +21,8 @@ interface PlayerSeatProps {
   isDealer: boolean;
   /** Their cards are face up: it is you, or they chose to show. */
   revealed: boolean;
+  /** Their connection dropped; the seat is being held for them. */
+  isAway: boolean;
   position: SeatPosition;
 }
 
@@ -33,6 +35,7 @@ export function PlayerSeat({
   isWinner,
   isDealer,
   revealed,
+  isAway,
   position,
 }: PlayerSeatProps) {
   const cardCount = player.holeCards.length || player.holeCardCount || 2;
@@ -46,6 +49,7 @@ export function PlayerSeat({
     isActing && 'is-acting',
     isWinner && 'is-winner',
     player.folded && 'is-folded',
+    isAway && 'is-away',
   ]
     .filter(Boolean)
     .join(' ');
@@ -82,7 +86,9 @@ export function PlayerSeat({
               BB
             </span>
           )}
-          {player.folded ? (
+          {isAway ? (
+            <span className="seat-away">away</span>
+          ) : player.folded ? (
             <span className="seat-action action-fold">folded</span>
           ) : isActing && secondsLeft != null ? (
             <span className={`seat-clock ${secondsLeft <= 10 ? 'urgent' : ''}`}>{secondsLeft}s</span>

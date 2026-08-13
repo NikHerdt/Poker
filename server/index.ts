@@ -14,12 +14,18 @@ import {
   inSeatOrder,
   nextDealerId,
   seatPlayer,
+  markDisconnected,
+  isDisconnected,
+  reclaimSeat,
+  dropExpiredSeats,
+  tallyKickVote,
   type Room,
 } from './room-manager';
 import {
   MIN_PLAYERS,
   MAX_PLO_PLAYERS,
   TURN_TIME_LIMIT_MS,
+  NEXT_HAND_DELAY_MS,
   PROTOCOL_VERSION,
 } from './shared/constants';
 import { tournamentStateForHand } from './shared/blinds';
@@ -104,13 +110,15 @@ function ensureRoomStateBeforeSend(room: Room | null): void {
 }
 
 /**
- * The room as one player may see it: you always get your own hole cards, and
- * everyone else's only once they choose to show them. Hidden hands are sent as
- * a count so the table can still lay out the right number of card backs.
+ * The room as one player may see it: you always get your own hole cards,
+ * everyone else's once they are turned face up, and any hand you have been
+ * given a private look at. Hidden hands are sent as a count so the table can
+ * still lay out the right number of card backs.
  */
 function stateFor(state: RoomState, viewerId: string | null): RoomState {
   if (!state.game) return state;
   const revealed = new Set(state.game.revealedPlayerIds ?? []);
+  if (viewerId) for (const id of state.peekGrants?.[viewerId] ?? []) revealed.add(id);
   return {
     ...state,
     game: {
@@ -138,24 +146,46 @@ function broadcast(roomCode: string, message: { type: string; state?: RoomState 
 }
 
 /**
- * A player left, or their connection dropped. There is no way back into the
- * same seat, so treat both the same: fold them out of the hand in progress and
- * free their seat, and let everyone still at the table carry on.
+ * A player is out of the hand in progress, either because they left or because
+ * their connection went. `keepSeat` is the difference: a dropped connection
+ * holds the seat and chips for a while so they can come back to them, while
+ * leaving on purpose gives the seat up.
  */
-function handleDeparture(roomCode: string, playerId: string): void {
+function handleDeparture(roomCode: string, playerId: string, keepSeat: boolean): void {
   const room = getRoom(roomCode);
   if (!room) return;
   const game = room.state.game;
   if (game && game.phase !== 'finished' && game.phase !== 'showdown') {
     removePlayerFromHand(game, playerId);
   }
-  leaveRoom(roomCode, playerId);
-  removeSocket(roomCode, playerId);
+
+  if (keepSeat && room.state.seatOrder.includes(playerId)) {
+    markDisconnected(roomCode, playerId);
+    removeSocket(roomCode, playerId);
+  } else {
+    leaveRoom(roomCode, playerId);
+    removeSocket(roomCode, playerId);
+  }
 
   const remaining = getRoom(roomCode);
   if (!remaining) return; // room emptied out and was cleaned up
   ensureRoomStateBeforeSend(remaining);
   broadcast(roomCode, { type: 'room_state', state: remaining.state });
+}
+
+/** Conclude a kick vote once the table has decided, and remove the player if so. */
+function resolveKickVote(room: Room): void {
+  const vote = room.state.kickVote;
+  if (!vote) return;
+  const { outcome } = tallyKickVote(vote, room.playerIds);
+  if (outcome === 'pending') return;
+
+  room.state.kickVote = undefined;
+  if (outcome === 'kick') {
+    const socket = getSockets(room.state.roomCode).get(vote.targetId);
+    socket?.send(JSON.stringify({ type: 'error', error: 'The table voted to remove you' }));
+    handleDeparture(room.state.roomCode, vote.targetId, false);
+  }
 }
 
 wss.on('connection', (ws) => {
@@ -219,6 +249,32 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      if (msg.type === 'rejoin_room') {
+        const roomCode = (msg.roomCode ?? '').toUpperCase().trim();
+        const wantedId = msg.playerId ?? '';
+        const state = roomCode && wantedId ? reclaimSeat(roomCode, wantedId) : null;
+        if (!state) {
+          ws.send(JSON.stringify({ type: 'error', error: 'That seat is no longer being held' }));
+          return;
+        }
+        currentRoomCode = roomCode;
+        currentPlayerId = wantedId;
+        addSocket(roomCode, wantedId, ws);
+        const room = getRoom(roomCode)!;
+        ensureRoomStateBeforeSend(room);
+        ws.send(
+          JSON.stringify({
+            type: 'room_joined',
+            roomCode,
+            playerId: wantedId,
+            state: stateFor(room.state, wantedId),
+            protocolVersion: PROTOCOL_VERSION,
+          })
+        );
+        broadcast(roomCode, { type: 'room_state', state: room.state });
+        return;
+      }
+
       if (msg.type === 'start_game') {
         if (!currentRoomCode || !currentPlayerId) {
           ws.send(JSON.stringify({ type: 'error', error: 'Not in a room' }));
@@ -245,6 +301,17 @@ wss.on('connection', (ws) => {
           return;
         }
 
+        // Give everyone a moment with the result before the table is cleared.
+        const endedAt = room.state.game?.endedAtMs;
+        if (isFinished && endedAt != null && Date.now() - endedAt < NEXT_HAND_DELAY_MS) {
+          const wait = Math.ceil((NEXT_HAND_DELAY_MS - (Date.now() - endedAt)) / 1000);
+          ws.send(JSON.stringify({ type: 'error', error: `Hold on — ${wait}s left to see the result` }));
+          return;
+        }
+
+        // Seats held for players who never came back are released here.
+        dropExpiredSeats(currentRoomCode);
+
         let activePlayerIds: string[];
         let previousChips: Record<string, number> | undefined;
         let previousBuyInCounts: Record<string, number> | undefined;
@@ -252,7 +319,10 @@ wss.on('connection', (ws) => {
         const handNumber = isFinished && room.state.game ? room.state.game.handNumber + 1 : 1;
 
         if (isNewGame) {
-          activePlayerIds = inSeatOrder(room.state, room.playerIds);
+          activePlayerIds = inSeatOrder(
+            room.state,
+            [...room.playerIds].filter((id) => !isDisconnected(room.state, id))
+          );
         } else {
           ensureRebuyStateWhenFinished(currentRoomCode);
           const prevGame = room.state.game!;
@@ -261,8 +331,10 @@ wss.on('connection', (ws) => {
           const buyInCounts = room.state.playerIdToBuyInCount ?? {};
 
           // Players who have left keep their seat in the finished hand for the
-          // record, but they are not dealt into the next one.
-          const stillHere = (id: string) => room.playerIds.has(id);
+          // record, but they are not dealt into the next one. Someone whose
+          // connection dropped keeps their seat and chips and sits out until
+          // they are back.
+          const stillHere = (id: string) => room.playerIds.has(id) && !isDisconnected(room.state, id);
           const withChips = prevGame.players.filter((p) => p.chips > 0 && stillHere(p.id)).map((p) => p.id);
           const zeroRebuyYes = prevGame.players
             .filter((p) => p.chips <= 0 && rebuy[p.id] === 'yes' && stillHere(p.id))
@@ -367,6 +439,9 @@ wss.on('connection', (ws) => {
         });
         room.state.pendingTestScenario = undefined;
         room.state.lastDealerId = dealerId;
+        // Permission to see a hand lasts only for the hand it was given in.
+        room.state.peekGrants = undefined;
+        room.state.peekRequests = undefined;
         room.state.game = game;
         if (!room.state.playerIdToBuyInCount) room.state.playerIdToBuyInCount = {};
         for (const p of game.players) {
@@ -591,9 +666,111 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      if (msg.type === 'kick_vote_start') {
+        if (!currentRoomCode || !currentPlayerId) return;
+        const room = getRoom(currentRoomCode);
+        if (!room) return;
+        const target = msg.targetPlayerId;
+        if (!target || target === currentPlayerId || !room.playerIds.has(target)) {
+          ws.send(JSON.stringify({ type: 'error', error: 'No such player to vote out' }));
+          return;
+        }
+        if (room.state.kickVote) return;
+        if (room.playerIds.size < 3) {
+          ws.send(JSON.stringify({ type: 'error', error: 'A kick needs at least three players at the table' }));
+          return;
+        }
+        // The player who calls the vote is counted as voting yes.
+        room.state.kickVote = {
+          targetId: target,
+          initiatorId: currentPlayerId,
+          votes: { [currentPlayerId]: 'yes' },
+        };
+        resolveKickVote(room);
+        ensureRoomStateBeforeSend(room);
+        broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+        return;
+      }
+
+      if (msg.type === 'kick_vote_yes' || msg.type === 'kick_vote_no') {
+        if (!currentRoomCode || !currentPlayerId) return;
+        const room = getRoom(currentRoomCode);
+        const vote = room?.state.kickVote;
+        if (!room || !vote) return;
+        if (currentPlayerId === vote.targetId) {
+          ws.send(JSON.stringify({ type: 'error', error: 'You cannot vote on your own kick' }));
+          return;
+        }
+        vote.votes[currentPlayerId] = msg.type === 'kick_vote_yes' ? 'yes' : 'no';
+        resolveKickVote(room);
+        ensureRoomStateBeforeSend(room);
+        broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+        return;
+      }
+
+      if (msg.type === 'peek_request') {
+        if (!currentRoomCode || !currentPlayerId) return;
+        const room = getRoom(currentRoomCode);
+        const game = room?.state.game;
+        if (!room || !game) return;
+        // Only a player who is out of the hand may ask to see cards, and only
+        // while the hand is still being played — once it is over, anyone who
+        // wants to show simply shows.
+        if (game.phase === 'finished' || game.phase === 'showdown') {
+          ws.send(JSON.stringify({ type: 'error', error: 'The hand is over — ask them to show instead' }));
+          return;
+        }
+        const asker = game.players.find((p) => p.id === currentPlayerId);
+        if (!asker?.folded) {
+          ws.send(JSON.stringify({ type: 'error', error: 'You can only ask to see a hand once you have folded' }));
+          return;
+        }
+        // And only a player still in the hand can be asked: there is nothing to
+        // see in a hand that has already been thrown away.
+        const target = msg.targetPlayerId;
+        const targetPlayer = game.players.find((p) => p.id === target);
+        if (!target || target === currentPlayerId || !targetPlayer) return;
+        if (targetPlayer.folded) {
+          ws.send(JSON.stringify({ type: 'error', error: 'That player is out of the hand too' }));
+          return;
+        }
+        if (room.state.peekGrants?.[currentPlayerId]?.includes(target)) return;
+        if (!room.state.peekRequests) room.state.peekRequests = [];
+        const already = room.state.peekRequests.some(
+          (r) => r.viewerId === currentPlayerId && r.targetId === target
+        );
+        if (!already) room.state.peekRequests.push({ viewerId: currentPlayerId, targetId: target });
+        ensureRoomStateBeforeSend(room);
+        broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+        return;
+      }
+
+      if (msg.type === 'peek_allow' || msg.type === 'peek_decline') {
+        if (!currentRoomCode || !currentPlayerId) return;
+        const room = getRoom(currentRoomCode);
+        if (!room?.state.peekRequests) return;
+        const viewer = msg.targetPlayerId;
+        const request = room.state.peekRequests.find(
+          (r) => r.viewerId === viewer && r.targetId === currentPlayerId
+        );
+        if (!request) return;
+
+        room.state.peekRequests = room.state.peekRequests.filter((r) => r !== request);
+        if (msg.type === 'peek_allow' && viewer) {
+          // Only this viewer sees the hand, and only until the next deal.
+          if (!room.state.peekGrants) room.state.peekGrants = {};
+          const seen = room.state.peekGrants[viewer] ?? [];
+          if (!seen.includes(currentPlayerId)) seen.push(currentPlayerId);
+          room.state.peekGrants[viewer] = seen;
+        }
+        ensureRoomStateBeforeSend(room);
+        broadcast(currentRoomCode, { type: 'room_state', state: room.state });
+        return;
+      }
+
       if (msg.type === 'leave_room') {
         if (currentRoomCode && currentPlayerId) {
-          handleDeparture(currentRoomCode, currentPlayerId);
+          handleDeparture(currentRoomCode, currentPlayerId, false);
           currentRoomCode = null;
           currentPlayerId = null;
         }
@@ -605,8 +782,10 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    // A dropped socket is treated as a connection problem, not a decision to
+    // leave: the seat is held so they can come back to it.
     if (currentRoomCode && currentPlayerId) {
-      handleDeparture(currentRoomCode, currentPlayerId);
+      handleDeparture(currentRoomCode, currentPlayerId, true);
     }
   });
 });

@@ -102,6 +102,12 @@ input[type="number"] {
   padding: 0;
 }
 
+.app-alert button {
+  min-height: 40px;
+  padding: 0.45rem 0.9rem;
+  touch-action: manipulation;
+}
+
 .app-alert-stale {
   background: rgba(214, 158, 46, 0.18);
   border: 1px solid rgba(214, 158, 46, 0.5);

@@ -43,7 +43,8 @@
 
 .table-header .leave-btn {
   background: var(--accent-red);
-  padding: 0.35rem 0.85rem;
+  padding: 0.5rem 0.9rem;
+  min-height: 40px;
   font-size: 0.85rem;
   font-weight: 500;
   border-radius: var(--radius-sm);
@@ -91,7 +92,10 @@
   max-width: 900px;
   aspect-ratio: 8 / 5;
   margin: 0 auto;
-  flex: 0 0 auto;
+  /* Allowed to squash a little when a banner appears, rather than pushing the
+     action panel off a short screen. */
+  flex: 0 1 auto;
+  min-height: 0;
 }
 
 .table-felt {
@@ -202,8 +206,8 @@
 }
 
 .card-community {
-  width: clamp(30px, 8vw, 62px);
-  margin-right: -6px;
+  width: clamp(38px, 10.5vw, 78px);
+  margin-right: -4px;
 }
 
 .card-community:last-child {
@@ -211,13 +215,13 @@
 }
 
 .card-hand {
-  width: clamp(24px, 6vw, 44px);
-  margin-right: -10px;
+  width: clamp(28px, 7.2vw, 52px);
+  margin-right: -9px;
 }
 
 .card-mine {
-  width: clamp(32px, 8.5vw, 58px);
-  margin-right: -8px;
+  width: clamp(38px, 10vw, 68px);
+  margin-right: -7px;
 }
 
 .card-hand:last-child,
@@ -399,8 +403,12 @@
 
 .table-area[data-density='tight'] .card-hand,
 .table-area[data-density='tight'] .card-mine {
-  width: clamp(18px, 4.6vw, 32px);
+  width: clamp(22px, 5.6vw, 38px);
   margin-right: -8px;
+}
+
+.table-area[data-density='tight'] .card-community {
+  width: clamp(32px, 8.6vw, 62px);
 }
 
 
@@ -661,8 +669,8 @@
 }
 
 .my-hand-cards .card {
-  width: clamp(46px, 13vw, 68px);
-  margin-right: -10px;
+  width: clamp(58px, 16vw, 86px);
+  margin-right: -9px;
 }
 
 .my-hand-cards .card .card-face {
@@ -724,8 +732,10 @@
   font-size: 0.85rem;
 }
 
+/* 40px minimum on anything tappable: comfortable on a phone. */
 .btn {
   padding: 0.6rem 1rem;
+  min-height: 40px;
   border: none;
   border-radius: var(--radius-sm);
   font-size: 0.95rem;
@@ -733,6 +743,7 @@
   color: var(--text-primary);
   background: var(--bg-card-hover);
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .btn b {
@@ -830,21 +841,34 @@
   cursor: not-allowed;
 }
 
+/* The track is thin but the control itself is a comfortable height to drag. */
 .bet-slider {
   flex: 1 1 auto;
-  height: 10px;
-  border-radius: 5px;
-  background: rgba(0, 0, 0, 0.4);
+  height: 40px;
+  background: transparent;
   outline: none;
   -webkit-appearance: none;
   appearance: none;
 }
 
+.bet-slider::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.bet-slider::-moz-range-track {
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.4);
+}
+
 .bet-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
+  margin-top: -9px;
   border-radius: 50%;
   background: var(--accent-green);
   border: 2px solid rgba(255, 255, 255, 0.3);
@@ -868,7 +892,8 @@
 }
 
 .chip-btn {
-  padding: 0.5rem 0.25rem;
+  padding: 0.6rem 0.25rem;
+  min-height: 40px;
   border: 1px solid var(--border-mid);
   border-radius: var(--radius-sm);
   background: transparent;
@@ -971,6 +996,229 @@
   padding: 0.5rem 0.9rem;
 }
 
+/* Game menu: everything that is not a betting decision. */
+.menu-btn {
+  padding: 0.5rem 0.95rem;
+  min-height: 40px;
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.menu-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 900;
+}
+
+.game-menu {
+  position: fixed;
+  z-index: 901;
+  top: 0;
+  right: 0;
+  width: min(92vw, 360px);
+  max-height: 100dvh;
+  overflow-y: auto;
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  background: var(--bg-mid);
+  border-left: 1px solid var(--border-mid);
+  box-shadow: var(--shadow-lg);
+  animation: menu-in 0.18s ease-out;
+}
+
+@keyframes menu-in {
+  from {
+    transform: translateX(12px);
+    opacity: 0;
+  }
+}
+
+.menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.menu-header b {
+  letter-spacing: 0.12em;
+  color: var(--text-primary);
+}
+
+.menu-section h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.menu-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.menu-note {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.menu-tag {
+  margin-left: 0.35rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #d98f83;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-menu {
+    animation: none;
+  }
+}
+
+/* Between-hands controls for dealing with other players. */
+.table-panel {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.table-panel-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.player-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.player-row-actions {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.mini-btn {
+  padding: 0.4rem 0.75rem;
+  min-height: 40px;
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.mini-btn.danger {
+  border-color: rgba(184, 92, 76, 0.6);
+  color: #d98f83;
+}
+
+/* Offered to a player who has folded, while the hand is still being played. */
+.peek-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.peek-bar-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.peek-bar-buttons {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.peek-granted {
+  font-size: 0.75rem;
+  color: var(--accent-gold);
+}
+
+.peek-pending {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.peek-prompt,
+.kick-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.peek-prompt + .peek-prompt {
+  margin-top: 0.4rem;
+}
+
+.peek-actions,
+.kick-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.kick-voted {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.seat.is-away {
+  opacity: 0.5;
+  border-style: dashed;
+}
+
+.seat-away {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #d98f83;
+}
+
 .plo-unavailable {
   font-size: 0.78rem;
   color: var(--text-muted);
@@ -1007,7 +1255,9 @@
      panel, so nothing needs scrolling — including at the end of a hand. */
   .table-area {
     aspect-ratio: 1 / 1;
-    max-height: 52dvh;
+    /* Leaves room for the header, the action panel and the odd banner without
+       the page needing to scroll on a short phone. */
+    max-height: 48dvh;
   }
 
   /* A full ring needs more vertical room between the seats stacked down each
@@ -1036,9 +1286,59 @@
   }
 }
 
-@media (max-width: 640px) and (orientation: landscape) {
-  .table-area {
-    aspect-ratio: 8 / 5;
-    max-height: 62vh;
+/* Short screens — a phone held sideways — are limited by height, not width, so
+   the table flattens and the controls tighten up to stay on one screen. */
+@media (max-height: 560px) {
+  .table-page {
+    gap: 0.35rem;
+    padding: 0.4rem;
+  }
+
+  .table-area,
+  .table-area[data-density='tight'] {
+    aspect-ratio: 16 / 7;
+    max-height: 46dvh;
+  }
+
+  .table-felt {
+    inset: 8% 6%;
+  }
+
+  /* A flattened ring leaves less vertical room between neighbours. */
+  .seat {
+    width: clamp(56px, 12vw, 96px);
+    padding: 0.2rem 0.25rem 0.25rem;
+    line-height: 1.15;
+  }
+
+  .card-hand,
+  .card-mine {
+    width: clamp(20px, 4.2vw, 34px);
+  }
+
+  .card-community {
+    width: clamp(28px, 6vw, 50px);
+  }
+
+  .bet-primary .btn {
+    padding: 0.5rem 0.4rem;
+    font-size: 0.85rem;
+  }
+
+  .bet-hint {
+    display: none;
+  }
+
+  .my-hand-cards .card {
+    width: clamp(34px, 7vw, 48px);
+  }
+
+  .action-meta {
+    margin-bottom: 0.35rem;
+  }
+
+  .bet-controls {
+    padding: 0.5rem;
+    gap: 0.4rem;
   }
 }

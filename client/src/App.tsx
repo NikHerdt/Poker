@@ -28,10 +28,11 @@ export default function App() {
           </button>
         </div>
       )}
-      {!connected && (
-        <p className="app-connecting">Connecting to server...</p>
+      {!connected && <p className="app-connecting">Connecting to server...</p>}
+      {connected && socket.rejoining && !state && (
+        <p className="app-connecting">Getting your seat back…</p>
       )}
-      {connected && !state && (
+      {connected && !state && !socket.rejoining && (
         <Lobby
           onCreateRoom={socket.createRoom}
           onJoinRoom={socket.joinRoom}

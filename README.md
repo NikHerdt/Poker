@@ -110,9 +110,23 @@ minimums reset each street, and you can always shove for less. The amount has a
 slider, − / + buttons that step by a big blind, and Min / ½ pot / Pot / All-in
 shortcuts.
 
-**Showing cards** is opt-in. Hole cards are never sent to other players'
-browsers — not just hidden in the UI — so the only way anyone sees your hand is
-if you press *Show my cards* after the hand.
+**Showing cards.** Everyone who reaches a showdown turns their hand over
+automatically, as they would at a real table. A hand that ends on a fold shows
+nothing unless the winner presses *Show my cards*. Hole cards are never sent to
+other players' browsers — not just hidden in the UI — so nothing leaks early.
+
+**Peeking.** Once you have folded, you can ask a player still in the hand to
+show you their cards. They choose whether to say yes, only you see them, and
+the permission lasts until the next deal. You cannot ask while you are still in
+the hand, and there is nothing to ask for once the hand is over.
+
+**The game menu** (top right) holds everything that is not a betting decision:
+the room code, calling a vote to remove a player, voting to switch to Omaha,
+test scenarios and leaving the table.
+
+**Voting someone out.** Any player can call a vote against another, needing at
+least three at the table. Everyone except the player in question votes, and a
+majority carries it.
 
 **The clock.** Whoever is on the clock has 60 seconds, counted down in their
 seat so the whole table can see it. Run out and the server acts for you: it
@@ -120,9 +134,10 @@ checks if that costs nothing, and folds otherwise. The countdown is the
 server's, so closing a tab or losing signal cannot stall the table.
 
 **Dealing.** The host opens the game, but once it is running *Next hand* is
-available to everyone — no waiting on one person between hands. It stays
-disabled until any busted players have answered their rebuy prompt and at least
-two players are in.
+available to everyone — no waiting on one person between hands. There is a
+six second pause on the result first, so nobody misses the showdown, and the
+button stays disabled until any busted players have answered their rebuy prompt
+and at least two players are in.
 
 ## Seats, joining and leaving
 
@@ -134,9 +149,14 @@ blinds skip or repeat.
 - **Joining a game in progress** puts you in as a spectator with a request to
   the host, who gets Admit / Decline buttons. Admitted players take the last
   seat and are dealt in on the next hand.
-- **Leaving**, or dropping the connection, folds that player out of the hand in
-  progress and frees their seat, so everyone else carries on straight away. If
-  that leaves one player, they take the pot.
+- **Leaving on purpose** folds that player out of the hand in progress and
+  frees their seat, so everyone else carries on straight away. If that leaves
+  one player, they take the pot.
+- **Losing your connection** is treated differently: you are folded out of the
+  hand in progress so nobody is left waiting, but your seat, chips and place in
+  the blind order are held for five minutes. Reopen the page and you are put
+  back where you were. The table shows you as *away* meanwhile, and you are not
+  dealt in until you are back.
 - **Rebuying** keeps your original seat.
 
 ## Blind levels (tournament style)

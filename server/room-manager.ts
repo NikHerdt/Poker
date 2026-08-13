@@ -1,5 +1,6 @@
-import type { BlindStructure, RoomState, RoomConfig } from './shared/types';
+import type { BlindStructure, KickVote, RoomState, RoomConfig } from './shared/types';
 import { DEFAULT_BLIND_MULTIPLIER, DEFAULT_MAX_BLIND_LEVEL } from './shared/blinds';
+import { RECONNECT_GRACE_MS } from './shared/constants';
 import {
   ROOM_CODE_LENGTH,
   MIN_PLAYERS,
@@ -171,6 +172,73 @@ export function removeSocket(roomCode: string, playerId: string): void {
   }
 }
 
+/** Hold a seat for someone whose connection dropped, rather than freeing it. */
+export function markDisconnected(roomCode: string, playerId: string): void {
+  const room = rooms.get(roomCode.toUpperCase());
+  if (!room || !room.state.seatOrder.includes(playerId)) return;
+  if (!room.state.disconnectedAtMs) room.state.disconnectedAtMs = {};
+  room.state.disconnectedAtMs[playerId] = Date.now();
+  const player = room.state.game?.players.find((p) => p.id === playerId);
+  if (player) player.connected = false;
+}
+
+export function isDisconnected(state: RoomState, playerId: string): boolean {
+  return state.disconnectedAtMs?.[playerId] !== undefined;
+}
+
+/**
+ * Take back a held seat. The player keeps their chips, their place in the blind
+ * order and their name; only the socket behind the seat changes.
+ */
+export function reclaimSeat(roomCode: string, playerId: string): RoomState | null {
+  const room = rooms.get(roomCode.toUpperCase());
+  if (!room) return null;
+  if (!room.state.seatOrder.includes(playerId)) return null;
+  if (!isDisconnected(room.state, playerId)) return null;
+
+  const since = room.state.disconnectedAtMs![playerId];
+  if (Date.now() - since > RECONNECT_GRACE_MS) return null;
+
+  delete room.state.disconnectedAtMs![playerId];
+  room.playerIds.add(playerId);
+  const player = room.state.game?.players.find((p) => p.id === playerId);
+  if (player) player.connected = true;
+  return room.state;
+}
+
+export type KickOutcome = 'pending' | 'kick' | 'keep';
+
+/**
+ * Where a kick vote stands. Everyone except the player being voted on gets a
+ * say, and it takes a majority of them to remove someone. A vote that cannot
+ * reach a majority any more is settled rather than left hanging.
+ */
+export function tallyKickVote(
+  vote: KickVote,
+  playerIds: Iterable<string>
+): { yes: number; no: number; needed: number; outcome: KickOutcome } {
+  const voters = [...playerIds].filter((id) => id !== vote.targetId);
+  const yes = voters.filter((id) => vote.votes[id] === 'yes').length;
+  const no = voters.filter((id) => vote.votes[id] === 'no').length;
+  const needed = Math.floor(voters.length / 2) + 1;
+
+  let outcome: KickOutcome = 'pending';
+  if (yes >= needed) outcome = 'kick';
+  else if (no >= needed || yes + no >= voters.length) outcome = 'keep';
+  return { yes, no, needed, outcome };
+}
+
+/** Give up on seats whose grace period has run out. */
+export function dropExpiredSeats(roomCode: string): string[] {
+  const room = rooms.get(roomCode.toUpperCase());
+  if (!room?.state.disconnectedAtMs) return [];
+  const expired = Object.entries(room.state.disconnectedAtMs)
+    .filter(([, since]) => Date.now() - since > RECONNECT_GRACE_MS)
+    .map(([id]) => id);
+  for (const id of expired) leaveRoom(roomCode, id);
+  return expired;
+}
+
 export function getSockets(roomCode: string): Map<string, import('ws').WebSocket> {
   const room = rooms.get(roomCode.toUpperCase());
   return room?.sockets ?? new Map();
@@ -198,6 +266,16 @@ export function leaveRoom(roomCode: string, playerId: string): RoomState | null 
   if (room.state.rebuyDecisions) delete room.state.rebuyDecisions[playerId];
   if (room.state.rebuyRequested) delete room.state.rebuyRequested[playerId];
   if (room.state.ploVote) delete room.state.ploVote.votes[playerId];
+  if (room.state.disconnectedAtMs) delete room.state.disconnectedAtMs[playerId];
+  if (room.state.kickVote) {
+    delete room.state.kickVote.votes[playerId];
+    if (room.state.kickVote.targetId === playerId) room.state.kickVote = undefined;
+  }
+  if (room.state.peekRequests) {
+    room.state.peekRequests = room.state.peekRequests.filter(
+      (r) => r.viewerId !== playerId && r.targetId !== playerId
+    );
+  }
   if (room.state.game) {
     const p = room.state.game.players.find((x) => x.id === playerId);
     if (p) p.connected = false;
