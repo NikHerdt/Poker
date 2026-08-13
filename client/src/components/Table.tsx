@@ -3,15 +3,16 @@ import type { RoomState, Card, Player } from 'shared/types';
 import type { UseGameSocketResult } from '../hooks/useGameSocket';
 import { evaluateHand, evaluateHandOmaha, formatHandDescription } from 'shared/hand-eval';
 import { getTestScenario } from 'shared/test-scenarios';
-import { MAX_PLO_PLAYERS } from 'shared/constants';
+import { NEXT_HAND_DELAY_MS } from 'shared/constants';
 import { CardImage } from './CardImage';
 import { PlayerSeat, SeatBet, type SeatPosition } from './PlayerSeat';
 import { MyHand } from './MyHand';
 import { ChipFlights, useChipFlights } from './ChipFlight';
+import { PeekBar, PeekPrompts, KickVoteBanner } from './TablePanel';
 import { useCountUp } from '../hooks/useCountUp';
 import { BetControls } from './BetControls';
 import { BlindLevelBadge } from './BlindLevelBadge';
-import { TestScenarioPicker } from './TestScenarioPicker';
+import { GameMenu } from './GameMenu';
 import { FieldGoalMinigame } from './FieldGoalMinigame';
 import './Table.css';
 import './FieldGoalMinigame.css';
@@ -170,9 +171,7 @@ export function Table({ state, playerId, socket }: TableProps) {
         </span>
         <BlindLevelBadge state={state} game={game} />
         {state.config.testMode && <span className="test-mode-chip">Test mode</span>}
-        <button type="button" className="leave-btn" onClick={socket.leaveRoom}>
-          Leave
-        </button>
+        <GameMenu state={state} playerId={playerId} players={game.players} socket={socket} />
       </header>
 
       {game.testScenario && (
@@ -185,6 +184,9 @@ export function Table({ state, playerId, socket }: TableProps) {
       {myJoinStatus === 'denied' && (
         <div className="notice">The host declined your request to join.</div>
       )}
+      <PeekPrompts state={state} playerId={playerId} socket={socket} />
+      <KickVoteBanner state={state} playerId={playerId} socket={socket} />
+
       {isHost && pendingJoins.length > 0 && (
         <div className="notice join-requests">
           {pendingJoins.map(([id]) => (
@@ -246,6 +248,7 @@ export function Table({ state, playerId, socket }: TableProps) {
             isWinner={handOver && winners.has(p.id)}
             isDealer={p.isDealer}
             revealed={p.id === playerId || revealed.has(p.id)}
+            isAway={state.disconnectedAtMs?.[p.id] !== undefined}
             position={positions[i]}
           />
         ))}
@@ -288,6 +291,9 @@ export function Table({ state, playerId, socket }: TableProps) {
                 )}
               </div>
             </div>
+            {me.folded && (
+              <PeekBar state={state} playerId={playerId} players={game.players} socket={socket} />
+            )}
             {isMyTurn && !me.folded && (
               <BetControls
                 game={game}
@@ -330,10 +336,27 @@ function ResultPanel({
   revealed: Set<string>;
   socket: UseGameSocketResult;
 }) {
-  const isHost = state.hostId === playerId;
-  // Players who left are still shown in the finished hand, but they neither owe
-  // a rebuy answer nor count towards starting the next hand.
-  const stillHere = (id: string) => state.playerIdToName[id] !== undefined;
+  // A short pause on the result before the next hand can be dealt.
+  const [waitLeft, setWaitLeft] = useState(0);
+  const endedAtMs = game.endedAtMs;
+  const serverNowMs = state.serverNowMs;
+  useEffect(() => {
+    if (endedAtMs == null) {
+      setWaitLeft(0);
+      return;
+    }
+    const skew = serverNowMs != null ? serverNowMs - Date.now() : 0;
+    const remaining = () =>
+      Math.max(0, Math.ceil((endedAtMs + NEXT_HAND_DELAY_MS - (Date.now() + skew)) / 1000));
+    setWaitLeft(remaining());
+    const t = setInterval(() => setWaitLeft(remaining()), 250);
+    return () => clearInterval(t);
+  }, [endedAtMs, serverNowMs]);
+  // Players who left, or whose connection dropped, are still shown in the
+  // finished hand, but they neither owe a rebuy answer nor count towards
+  // starting the next one.
+  const stillHere = (id: string) =>
+    state.playerIdToName[id] !== undefined && state.disconnectedAtMs?.[id] === undefined;
   const zeroChipIds = game.players
     .filter((p: Player) => p.chips <= 0 && stillHere(p.id))
     .map((p: Player) => p.id);
@@ -371,27 +394,19 @@ function ResultPanel({
           type="button"
           className="btn next-hand"
           onClick={socket.startGame}
-          disabled={!allDecided || activeCount < 2}
+          disabled={!allDecided || activeCount < 2 || waitLeft > 0}
           title={
-            !allDecided
-              ? 'Waiting for rebuy decisions'
-              : activeCount < 2
-                ? 'Need at least 2 players to start'
-                : 'Deal the next hand'
+            waitLeft > 0
+              ? 'Take a moment to look at the result'
+              : !allDecided
+                ? 'Waiting for rebuy decisions'
+                : activeCount < 2
+                  ? 'Need at least 2 players to start'
+                  : 'Deal the next hand'
           }
         >
-          Next hand
+          {waitLeft > 0 ? `Next hand in ${waitLeft}s` : 'Next hand'}
         </button>
-        {!state.ploVoteConcluded && !state.ploVote && game.players.length <= MAX_PLO_PLAYERS && (
-          <button type="button" className="btn plo-vote" onClick={socket.sendPloVoteStart}>
-            PLO vote
-          </button>
-        )}
-        {!state.ploVoteConcluded && !state.ploVote && game.players.length > MAX_PLO_PLAYERS && (
-          <span className="plo-unavailable">
-            PLO needs four cards each, so it is off above {MAX_PLO_PLAYERS} players
-          </span>
-        )}
       </div>
 
       {me && me.chips <= 0 && state.rebuyDecisions?.[playerId] === 'pending' && (
@@ -421,14 +436,7 @@ function ResultPanel({
         </div>
       )}
 
-      {state.config.testMode && (
-        <TestScenarioPicker
-          isHost={isHost}
-          pendingScenario={state.pendingTestScenario}
-          onSelect={socket.sendTestScenario}
-        />
-      )}
-
+      {/* Kicking, the PLO vote and test scenarios all live in the game menu. */}
       {!state.ploVoteConcluded && state.ploVote && (
         <div className="plo-vote-section">
           <p className="plo-vote-label">

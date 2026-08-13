@@ -142,8 +142,15 @@ export interface GameState {
   blindLevel?: number;
   /** Set when the hand was dealt by test mode with a rigged deck. */
   testScenario?: string;
-  /** Players who chose to show their hand after it ended. Nothing is shown automatically. */
+  /**
+   * Hands that are face up: everyone who reached a showdown is turned over
+   * automatically, and anyone else who chose to show is added here.
+   */
   revealedPlayerIds?: string[];
+  /** Set when the hand went to a showdown rather than ending on a fold. */
+  wasShowdown?: boolean;
+  /** Server clock when the hand ended, used for the pause before the next one. */
+  endedAtMs?: number;
   /**
    * Server clock time by which the acting player must act. Past this the server
    * checks or folds for them. Compare against `RoomState.serverNowMs`, not the
@@ -153,6 +160,21 @@ export interface GameState {
 }
 
 export type JoinRequestStatus = 'pending' | 'denied';
+
+/** A vote to remove someone from the table. The target does not get a vote. */
+export interface KickVote {
+  targetId: string;
+  initiatorId: string;
+  votes: Record<string, 'yes' | 'no'>;
+}
+
+/** One player asking another for a look at their hand. */
+export interface PeekRequest {
+  /** Who wants to look. */
+  viewerId: string;
+  /** Whose hand they want to see. */
+  targetId: string;
+}
 
 export interface RoomState {
   roomCode: string;
@@ -171,6 +193,20 @@ export interface RoomState {
   lastDealerId?: string;
   /** Players who asked to join a running game and are waiting on the host. */
   joinRequests?: Record<string, JoinRequestStatus>;
+  /**
+   * Players whose connection dropped, and when. Their seat and chips are held
+   * for RECONNECT_GRACE_MS so they can pick up where they left off.
+   */
+  disconnectedAtMs?: Record<string, number>;
+  /** A kick vote in progress. */
+  kickVote?: KickVote;
+  /** Outstanding requests to look at someone's hand. */
+  peekRequests?: PeekRequest[];
+  /**
+   * Who may see whose hand this hand, by permission: viewer id to the ids they
+   * have been shown. Cleared when the next hand is dealt.
+   */
+  peekGrants?: Record<string, string[]>;
   fieldGoalUsed?: Record<string, boolean>;
   /** For players with 0 chips at end of hand: pending until they send rebuy_yes/rebuy_no. */
   rebuyDecisions?: Record<string, 'pending' | 'yes' | 'no'>;
@@ -211,7 +247,14 @@ export type ClientMessageType =
   | 'set_test_scenario'
   | 'approve_join'
   | 'deny_join'
-  | 'show_cards';
+  | 'show_cards'
+  | 'rejoin_room'
+  | 'kick_vote_start'
+  | 'kick_vote_yes'
+  | 'kick_vote_no'
+  | 'peek_request'
+  | 'peek_allow'
+  | 'peek_decline';
 
 export type ServerMessageType =
   | 'room_created'
@@ -229,8 +272,10 @@ export interface ClientMessage {
   fieldGoalSuccess?: boolean;
   /** Test mode: id of the scenario to deal next hand, or null to clear. */
   testScenario?: string | null;
-  /** Host approving or denying a join request. */
+  /** The other player an action is aimed at: join approval, kick vote, peek. */
   targetPlayerId?: string;
+  /** Reclaiming a held seat after a dropped connection. */
+  playerId?: string;
 }
 
 export interface ServerMessage {

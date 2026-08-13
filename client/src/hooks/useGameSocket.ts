@@ -24,6 +24,8 @@ export interface UseGameSocketResult {
   connected: boolean;
   /** True when the server is running a different build than this client. */
   staleServer: boolean;
+  /** True while trying to take back a seat held after a dropped connection. */
+  rejoining: boolean;
   createRoom: (playerName: string, config?: CreateRoomConfig) => void;
   joinRoom: (roomCode: string, playerName: string) => void;
   startGame: () => void;
@@ -41,6 +43,37 @@ export interface UseGameSocketResult {
   approveJoin: (targetPlayerId: string) => void;
   denyJoin: (targetPlayerId: string) => void;
   sendShowCards: () => void;
+  startKickVote: (targetPlayerId: string) => void;
+  sendKickVote: (agree: boolean) => void;
+  requestPeek: (targetPlayerId: string) => void;
+  answerPeek: (viewerId: string, allow: boolean) => void;
+}
+
+/** Enough to take a held seat back after a dropped connection. */
+interface SavedSession {
+  roomCode: string;
+  playerId: string;
+}
+
+const SESSION_KEY = 'poker.session';
+
+function loadSession(): SavedSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    const parsed = raw ? (JSON.parse(raw) as SavedSession) : null;
+    return parsed?.roomCode && parsed?.playerId ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(session: SavedSession | null): void {
+  try {
+    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else localStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* private browsing, or storage full: reconnecting just will not be offered */
+  }
 }
 
 export function useGameSocket(): UseGameSocketResult {
@@ -50,6 +83,7 @@ export function useGameSocket(): UseGameSocketResult {
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [staleServer, setStaleServer] = useState(false);
+  const [rejoining, setRejoining] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   const send = useCallback((msg: ClientMessage) => {
@@ -95,6 +129,8 @@ export function useGameSocket(): UseGameSocketResult {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       send({ type: 'leave_room' });
     }
+    // Leaving on purpose gives the seat up, so there is nothing to come back to.
+    saveSession(null);
     setState(null);
     setPlayerId(null);
     setRoomCode(null);
@@ -161,13 +197,55 @@ export function useGameSocket(): UseGameSocketResult {
     if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'show_cards' });
   }, [send]);
 
+  const startKickVote = useCallback(
+    (targetPlayerId: string) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'kick_vote_start', targetPlayerId });
+    },
+    [send]
+  );
+
+  const sendKickVote = useCallback(
+    (agree: boolean) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        send({ type: agree ? 'kick_vote_yes' : 'kick_vote_no' });
+      }
+    },
+    [send]
+  );
+
+  const requestPeek = useCallback(
+    (targetPlayerId: string) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) send({ type: 'peek_request', targetPlayerId });
+    },
+    [send]
+  );
+
+  const answerPeek = useCallback(
+    (viewerId: string, allow: boolean) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        send({ type: allow ? 'peek_allow' : 'peek_decline', targetPlayerId: viewerId });
+      }
+    },
+    [send]
+  );
+
   const clearError = useCallback(() => setError(null), []);
 
   useEffect(() => {
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
 
-    ws.onopen = () => setConnected(true);
+    ws.onopen = () => {
+      setConnected(true);
+      // If a seat is being held for us after a dropped connection, take it back.
+      const saved = loadSession();
+      if (saved) {
+        setRejoining(true);
+        ws.send(
+          JSON.stringify({ type: 'rejoin_room', roomCode: saved.roomCode, playerId: saved.playerId })
+        );
+      }
+    };
     ws.onclose = () => {
       setConnected(false);
       setState(null);
@@ -185,23 +263,33 @@ export function useGameSocket(): UseGameSocketResult {
         if (data.type !== 'error') {
           setStaleServer(data.protocolVersion !== PROTOCOL_VERSION);
         }
-        if (data.type === 'room_created' && data.state != null) {
+        if (
+          (data.type === 'room_created' || data.type === 'room_joined') &&
+          data.state != null
+        ) {
           setState(data.state);
           setPlayerId(data.playerId ?? null);
           setRoomCode(data.roomCode ?? null);
           setError(null);
-        } else if (data.type === 'room_joined' && data.state != null) {
-          setState(data.state);
-          setPlayerId(data.playerId ?? null);
-          setRoomCode(data.roomCode ?? null);
-          setError(null);
+          setRejoining(false);
+          // Remember the seat so a dropped connection can pick it back up.
+          if (data.roomCode && data.playerId) {
+            saveSession({ roomCode: data.roomCode, playerId: data.playerId });
+          }
         } else if (data.type === 'room_state' && data.state != null) {
           setState(data.state);
         } else if (data.type === 'game_started' && data.state != null) {
           setState(data.state);
           setError(null);
         } else if (data.type === 'error' && data.error) {
-          setError(data.error);
+          // A seat that could not be reclaimed is not worth reporting: it just
+          // means the hold lapsed, so fall back to the normal lobby.
+          if (data.error.includes('no longer being held')) {
+            saveSession(null);
+            setRejoining(false);
+          } else {
+            setError(data.error);
+          }
         }
       } catch {
         setError('Invalid message');
@@ -221,6 +309,7 @@ export function useGameSocket(): UseGameSocketResult {
     error,
     connected,
     staleServer,
+    rejoining,
     createRoom,
     joinRoom,
     startGame,
@@ -238,5 +327,9 @@ export function useGameSocket(): UseGameSocketResult {
     approveJoin,
     denyJoin,
     sendShowCards,
+    startKickVote,
+    sendKickVote,
+    requestPeek,
+    answerPeek,
   };
 }
