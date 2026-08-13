@@ -163,6 +163,22 @@ export function addSocket(roomCode: string, playerId: string, ws: import('ws').W
   if (room) room.sockets.set(playerId, ws);
 }
 
+/**
+ * True when this socket is still the one behind the seat. A page refresh can
+ * land the new connection before the old socket's close is processed, and the
+ * late close must not undo the reconnection.
+ */
+export function isCurrentSocket(
+  roomCode: string,
+  playerId: string,
+  ws: import('ws').WebSocket | undefined
+): boolean {
+  const room = rooms.get(roomCode.toUpperCase());
+  if (!room) return false;
+  const current = room.sockets.get(playerId);
+  return current === undefined || ws === undefined || current === ws;
+}
+
 export function removeSocket(roomCode: string, playerId: string): void {
   const room = rooms.get(roomCode.toUpperCase());
   if (room) {
@@ -194,12 +210,13 @@ export function reclaimSeat(roomCode: string, playerId: string): RoomState | nul
   const room = rooms.get(roomCode.toUpperCase());
   if (!room) return null;
   if (!room.state.seatOrder.includes(playerId)) return null;
-  if (!isDisconnected(room.state, playerId)) return null;
 
-  const since = room.state.disconnectedAtMs![playerId];
-  if (Date.now() - since > RECONNECT_GRACE_MS) return null;
+  // A refresh often reconnects before the old socket's close has been noticed,
+  // so a seat that is not yet marked as dropped is still the player's to take.
+  const since = room.state.disconnectedAtMs?.[playerId];
+  if (since !== undefined && Date.now() - since > RECONNECT_GRACE_MS) return null;
 
-  delete room.state.disconnectedAtMs![playerId];
+  if (room.state.disconnectedAtMs) delete room.state.disconnectedAtMs[playerId];
   room.playerIds.add(playerId);
   const player = room.state.game?.players.find((p) => p.id === playerId);
   if (player) player.connected = true;

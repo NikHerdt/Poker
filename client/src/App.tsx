@@ -6,8 +6,10 @@ export default function App() {
   const socket = useGameSocket();
   const { state, playerId, error, connected, staleServer, clearError, leaveRoom } = socket;
 
-  // The table lays itself out to the full screen, so the shell drops its padding.
-  const atTable = connected && Boolean(state?.game);
+  // The table lays itself out to the full screen, so the shell drops its
+  // padding. It stays up through a dropped connection, so a blip does not look
+  // like being thrown out of the game.
+  const atTable = Boolean(state?.game);
 
   return (
     <div className={`app-shell ${atTable ? 'app-shell-table' : ''}`}>
@@ -28,7 +30,12 @@ export default function App() {
           </button>
         </div>
       )}
-      {!connected && <p className="app-connecting">Connecting to server...</p>}
+      {!connected && !state && <p className="app-connecting">Connecting to server…</p>}
+      {!connected && state && (
+        <div role="status" className="app-alert app-alert-reconnecting">
+          <span>Connection lost — reconnecting. Your seat is being held.</span>
+        </div>
+      )}
       {connected && socket.rejoining && !state && (
         <p className="app-connecting">Getting your seat back…</p>
       )}
@@ -38,7 +45,7 @@ export default function App() {
           onJoinRoom={socket.joinRoom}
         />
       )}
-      {connected && state && !state.game && (
+      {state && !state.game && (
         <Lobby
           roomCode={state.roomCode}
           playerId={playerId ?? undefined}
@@ -51,7 +58,7 @@ export default function App() {
           onSelectTestScenario={socket.sendTestScenario}
         />
       )}
-      {connected && state?.game && (
+      {state?.game && (
         <Table
           state={state}
           playerId={playerId ?? ''}
